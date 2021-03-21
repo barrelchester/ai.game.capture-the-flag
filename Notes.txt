@@ -1,0 +1,112 @@
+MVP definition for project
+- game elements function as expected
+  - basic game mechanics complete
+    - player's Team is announced at start
+    - winner is announced at end
+    - map is displayed with
+      - team1 side and team2 side indicated
+      - team1 and team2 flag areas indicated
+      - both flags
+      - player character
+      - agent players
+  - player actions are implemented
+    - basic movement
+      - human player can move character on the map
+      - movement speed is determined by terrain type they occupy
+    - capturing the flag
+      - players (including agents) can pick up opponent flag
+      - player/agents can bring flag to their home to end the game
+    - tagging
+      - players can tag opponents when
+        - opponent is on the player's side of the screen
+        - anytime an opponent has the flag
+    - tagged player drops the flag
+    - tagged player is incapacitated (temporarily unable to move)
+    - an incapacitated player instantly regains movement if tagged by a teammate
+
+- at least 4 AI algorithms are implemented in any of the game modules
+  - possible map generation algorithms
+    - CSP on the terrain areas to 'color' them distinctly with different terrain types (plain, swamp, hill, mountain, chasm, lake)
+    - some path search to ensure a path from flag to flag exists (lakes/chasms don't split the map)
+  - possible agent algorithms (easier to harder)
+    - A* to find least speed penalized path to flag
+    - goal/utility based algorithm to determine highest priority goal in a given state
+      - For example:
+      - if a flag is in play
+        - if opponent has the flag, go to opponent and tag them if you are closer than other teammates
+        - if you have the flag, go to home flag area with constraints to avoid opponents
+        - if teammate has flag, protect them by tagging opponents close to them
+      - else if other teammates are closer to opponent flag and another teammate is incapacitated
+        - go to incapacitated teammate and tag them to restore their movement
+      - else go to opponents flag with constraints to avoid opponents
+    - various multi-agent algorithms
+    - planning ("strategy") algorithm? High level planning with refinements? Resource limited planning where the consumable is Energy?
+    - reinforcement learning for automated strategy learning
+    - other automated learning techniques (ML, genetic alg., etc.)
+
+
+
+Given percepts, a Player chooses an action according to some algorithm.
+Split up the work amongst ourselves by player action choice algorithm.
+
+
+Atomic Low-Level Actions:
+ - move in some vector direction
+   - precond: none of the following are in the way: screen border, lake, chasm
+ - tag opponent
+   - precond: at opponent 
+ - tag teammate
+   - precond: at teammate
+ - pick up opponent flag
+   - precond: at opponent flag
+
+
+High-Level Plans/Actions:
+ - Rest (Energy is low)
+ - Capture opponent flag
+ - Guard team flag
+ - Offence - Tag opponents
+ - Defence - Rescue incapacitated teammates
+ - Support teammates 
+   - clear a path for them
+   - guard them from taggers
+ - Return with opponent flag
+
+
+Atomic/Low-Level Percepts:
+ - player current location (grid x,y)
+ - player current speed/terrain type 
+ - player current energy (for resting)
+ - home flag location (for guarding)
+ - opponent flag location (for capturing)
+ - teammates locations (for prioritizing actions)
+ - opponents locations (for tagging, blocking)
+ - teammate that has opponent flag (for supporting)
+ - opponent that has flag (for tagging and blocking)
+
+
+High-Level Percepts - Maybe a neural network could learn high level
+representations of states by predicting which team will capture a flag,
+incapacitate an opponent, rescue an opponent, win the game, etc. given 
+a current state.
+
+High level percepts would be detection of any of the following scenarios:
+ - Positive scenarios/opportunities
+   - Vulnerable/Unguarded opponent flag
+   - Open path to opponent flag
+   - Important teammate, oppotunity to coordinate and support
+     - has open path to flag and is close
+     - has flag
+     - close to opponent with flag
+ - Negative scenarios/dangers
+   - Vulnerable/Unguarded team flag
+   - Dangerous opponent area (numerous opponents can easily access area)
+   - Dead end area (Lake/chasm bordered land)
+   - Teammate in danger
+   
+   
+If these could be learned by a classifier, then those classifier parameters
+could be integrated with a reinforcement learning implementation.
+Based on results from OpenAI, I tend to believe that RL could yield the most
+'intelligent' agents displaying emergent strategies.
+
