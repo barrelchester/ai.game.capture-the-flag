@@ -31,7 +31,8 @@ class Config():
         
         
         #project paths
-        self.resources_path = 'resources'
+        self.app_path = '../app'
+        self.resources_path = '%s/resources' % self.app_path
         
         self.game_icon_image_path = '%s/icon.png' % self.resources_path
         self.game_background_image_path = '%s/background.png' % self.resources_path
@@ -86,7 +87,9 @@ class Config():
         self.player_max_energy = 100
         self.player_min_energy = 10
         
-        
+        #terrain
+        self.terrain_tile_size = 30
+        self.terrain_speeds = {'lake':0, 'swamp':7, 'plain':10, 'hill':5, 'mountain':3}
         
         
         
