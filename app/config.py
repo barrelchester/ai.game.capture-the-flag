@@ -6,6 +6,14 @@ class Config():
     def __init__(self):
         #constants
         
+        self.map_border_size = 20
+        self.terrain_tile_size = 20
+        self.flag_area_size = 100
+        
+        self.screen_width = self.terrain_tile_size*40 + self.map_border_size*2
+        self.screen_height = self.terrain_tile_size*30 + self.map_border_size*2
+        
+        
         #for pygame display
         self.game_name = 'Capture the Flag'
         self.game_description = ''
@@ -49,25 +57,28 @@ class Config():
         self.menu_map_display_image_path = '%s/menu_map_display.png' % self.menu_path
         
         self.maps_path = '%s/maps' % self.resources_path
-        self.map_default_path = '%s/default_map.png' % self.maps_path
+        self.map_default_path = '%s/map_840_640.png' % self.maps_path
+        #a matrix of speeds associated with each terrain tile in the default map
+        self.map_default_speed_array = '%s/map_speed_840_640.npy' % self.maps_path
         self.map_terrain_tiles_path = '%s/terrain_tiles' % self.maps_path
         
         
         self.sprites_path = '%s/sprites' % self.resources_path
-        self.team1_player_sprite_path = '%s/team1_player_sprite.png' % self.sprites_path
-        self.team1_agent_sprite_path = '%s/team1_agent_sprite.png' % self.sprites_path
-        self.team1_flag_sprite_path = '%s/team1_flag_sprite.png' % self.sprites_path
         
-        self.team2_player_sprite_path = '%s/team2_player_sprite.png' % self.sprites_path
-        self.team2_agent_sprite_path = '%s/team2_agent_sprite.png' % self.sprites_path
-        self.team2_flag_sprite_path = '%s/team2_flag_sprite.png' % self.sprites_path
+        self.blue_player_sprite_path = '%s/blue_player.gif' % self.sprites_path
+        self.blue_agent_sprite_path = '%s/blue_agent.gif' % self.sprites_path
+        self.blue_flag_sprite_path = '%s/blue_flag_%d.png' % (self.sprites_path, self.terrain_tile_size)
+        
+        self.red_player_sprite_path = '%s/red_player.gif' % self.sprites_path
+        self.red_agent_sprite_path = '%s/red_agent.gif' % self.sprites_path
+        self.red_flag_sprite_path = '%s/red_flag_%d.png' % (self.sprites_path, self.terrain_tile_size)
         
         
         #various defaults for instantiating objects
         
         #pygame related
-        self.screen_width = 1200
-        self.screen_height = 700
+        
+        
         #slow the update rate to avoid burning up CPU
         self.game_frame_rate = 30
         self.menu_frame_rate = 10
@@ -79,8 +90,8 @@ class Config():
         self.game_winning_screen_countdown = 10
         
         #game play
-        self.team1_size = 6
-        self.team2_size = 6
+        self.blue_team_size = 5
+        self.red_team_size = 5
         
         #player/agent
         self.player_max_speed = 10
@@ -88,9 +99,8 @@ class Config():
         self.player_min_energy = 10
         
         #terrain
-        self.terrain_tile_size = 30
         self.terrain_speeds = {'lake':0, 'swamp':7, 'plain':10, 'hill':5, 'mountain':3}
-        
+
         
         
         

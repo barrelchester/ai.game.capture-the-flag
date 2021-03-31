@@ -734,6 +734,15 @@ def scrollBackground(x, y):
 def setAutoUpdate(val):
     global screenRefresh
     screenRefresh = val
+    
+
+def setIcon(iconfile):
+    gameicon = pygame.image.load(iconfile)
+    pygame.display.set_icon(gameicon)
+
+    
+def setWindowTitle(string):
+    pygame.display.set_caption(string)
 
 
 if __name__ == "__main__":
