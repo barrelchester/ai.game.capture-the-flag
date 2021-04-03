@@ -47,15 +47,8 @@ class Config():
         self.team1_wins_screen = '%s/team1_wins_background.png' % self.resources_path
         self.team2_wins_screen = '%s/team2_wins_background.png' % self.resources_path
         
-        #menu items
-        self.menu_path = '%s/menu' % self.resources_path
-        self.menu_background_image_path = '%s/menu_background.png' % self.menu_path
-        self.menu_game_mode_select_image_path  = '%s/menu_mode_select.png' % self.menu_path
-        self.menu_team_size_select_image_path = '%s/menu_background.png' % self.menu_path
-        self.menu_regenerate_map_button_image_path = '%s/menu_background.png' % self.menu_path
-        self.menu_start_game_button_image_path = '%s/menu_background.png' % self.menu_path
-        self.menu_map_display_image_path = '%s/menu_map_display.png' % self.menu_path
         
+        #map paths
         self.maps_path = '%s/maps' % self.resources_path
         self.map_default_path = '%s/map_840_640.png' % self.maps_path
         #a matrix of speeds associated with each terrain tile in the default map
@@ -63,17 +56,40 @@ class Config():
         self.map_terrain_tiles_path = '%s/terrain_tiles' % self.maps_path
         
         
+        #sprite paths
         self.sprites_path = '%s/sprites' % self.resources_path
         
-        self.blue_player_sprite_path = '%s/blue_player.gif' % self.sprites_path
-        self.blue_agent_sprite_path = '%s/blue_agent.gif' % self.sprites_path
+        #flags
         self.blue_flag_sprite_path = '%s/blue_flag_%d.png' % (self.sprites_path, self.terrain_tile_size)
-        
-        self.red_player_sprite_path = '%s/red_player.gif' % self.sprites_path
-        self.red_agent_sprite_path = '%s/red_agent.gif' % self.sprites_path
         self.red_flag_sprite_path = '%s/red_flag_%d.png' % (self.sprites_path, self.terrain_tile_size)
         
+        #players and agents with and without flags
+        self.blue_player_sprite_path = '%s/blue_player.gif' % self.sprites_path
+        self.blue_player_with_flag_sprite_path = '%s/blue_player_with_flag.gif' % self.sprites_path
         
+        self.blue_agent_sprite_path = '%s/blue_agent.gif' % self.sprites_path
+        self.blue_agent_with_flag_sprite_path = '%s/blue_agent_with_flag.gif' % self.sprites_path
+        
+        self.red_agent_sprite_path = '%s/red_agent.gif' % self.sprites_path
+        self.red_agent_with_flag_sprite_path = '%s/red_agent_with_flag.gif' % self.sprites_path
+        
+        
+        #sounds
+        self.sounds_path = '%s/sounds' % self.resources_path
+        
+        #music
+        #no copyright - Jeremy Blake 'Powerup!'
+        self.default_game_music = '%s/game_music.mp3' % self.sounds_path
+        self.end_game_music = '%s/end_game_music.mp3' % self.sounds_path
+        
+        self.grabbed_flag_sound = '%s/yeehaa.mp3' % self.sounds_path
+        self.incapacitated_sound = '%s/incapacitated.mp3' % self.sounds_path
+        self.dropped_flag_sound = '%s/boing.mp3' % self.sounds_path
+        self.tagged_sound = '%s/whip_slap.mp3' % self.sounds_path
+        self.revived_sound = '%s/revived.mp3' % self.sounds_path
+        self.tagged_flag_carrier_sound = '%s/slap_bonk.mp3' % self.sounds_path
+        self.victory_sound = '%s/victory.mp3' % self.sounds_path
+
         #various defaults for instantiating objects
         
         #pygame related
@@ -99,8 +115,15 @@ class Config():
         self.player_min_energy = 10
         
         #terrain
-        self.terrain_speeds = {'lake':0, 'swamp':7, 'plain':10, 'hill':5, 'mountain':3}
+        self.terrain_speeds = {'lake':0, 'swamp':6, 'plain':10, 'hill':4, 'mountain':2}
 
         
         
-        
+        #TODO - menu items
+        self.menu_path = '%s/menu' % self.resources_path
+        self.menu_background_image_path = '%s/menu_background.png' % self.menu_path
+        self.menu_game_mode_select_image_path  = '%s/menu_mode_select.png' % self.menu_path
+        self.menu_team_size_select_image_path = '%s/menu_background.png' % self.menu_path
+        self.menu_regenerate_map_button_image_path = '%s/menu_background.png' % self.menu_path
+        self.menu_start_game_button_image_path = '%s/menu_background.png' % self.menu_path
+        self.menu_map_display_image_path = '%s/menu_map_display.png' % self.menu_path
