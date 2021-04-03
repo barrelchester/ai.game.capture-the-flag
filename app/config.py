@@ -16,6 +16,7 @@ class Config():
         
         #for pygame display
         self.game_name = 'Capture the Flag'
+        #TODO
         self.game_description = ''
         self.game_rules = ''
         
@@ -66,13 +67,15 @@ class Config():
         #players and agents with and without flags
         self.blue_player_sprite_path = '%s/blue_player.gif' % self.sprites_path
         self.blue_player_with_flag_sprite_path = '%s/blue_player_with_flag.gif' % self.sprites_path
+        self.blue_player_incapacitated_sprite_path = '%s/blue_player_incapacitated.gif' % self.sprites_path
         
         self.blue_agent_sprite_path = '%s/blue_agent.gif' % self.sprites_path
         self.blue_agent_with_flag_sprite_path = '%s/blue_agent_with_flag.gif' % self.sprites_path
+        self.blue_agent_incapacitated_sprite_path = '%s/blue_agent_incapacitated.gif' % self.sprites_path
         
         self.red_agent_sprite_path = '%s/red_agent.gif' % self.sprites_path
         self.red_agent_with_flag_sprite_path = '%s/red_agent_with_flag.gif' % self.sprites_path
-        
+        self.red_agent_incapacitated_path = '%s/red_agent_incapacitated.gif' % self.sprites_path
         
         #sounds
         self.sounds_path = '%s/sounds' % self.resources_path
