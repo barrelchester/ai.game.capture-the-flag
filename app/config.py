@@ -75,7 +75,7 @@ class Config():
         
         self.red_agent_sprite_path = '%s/red_agent.gif' % self.sprites_path
         self.red_agent_with_flag_sprite_path = '%s/red_agent_with_flag.gif' % self.sprites_path
-        self.red_agent_incapacitated_path = '%s/red_agent_incapacitated.gif' % self.sprites_path
+        self.red_agent_incapacitated_sprite_path = '%s/red_agent_incapacitated.gif' % self.sprites_path
         
         #sounds
         self.sounds_path = '%s/sounds' % self.resources_path
