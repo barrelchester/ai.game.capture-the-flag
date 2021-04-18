@@ -1,38 +1,62 @@
+import random
 import pygame_utils as pyg
+
 
 
 #human controlled or AI Agent controlled player classes
 
 class Player():
-    def __init__(self, sprite, team, tile_speeds, config):
-        #wads are the keyboard directions for up, left, right, down
-        #grab is for getting the flag, tag is for tagging an opponent, revive is for helping a teammate
-        self.actions = ['w', 'a', 'd', 's', 'grab', 'tag', 'revive']
+    def __init__(self, x, y, idx, team, the_map, config):
+        '''
+        x,y - the player/agent sprite starting location on the map
+        team - blue or red
+        the_map - a reference to the global map with speeds, flag locations, player locations
+        config - configurable settings
+        '''
+        self.config = config
+        
+        #w,a,d,s are the keyboard directions for up, left, right, down
+        self.actions = ['w', 'a', 'd', 's']
+        
+        #for debugging
         self.speed_terr = {v:k for k,v in self.config.terrain_speeds.items()}
         
         #configured values
-        self.max_speed = config.player_max_speed
-        self.max_energy = config.player_max_energy
-        self.min_energy = config.player_min_energy
         
-        self.sprite = sprite
+        #TODO - implement variable default speeds so some players are naturally faster
+        #self.max_speed = self.config.player_max_speed
+        
+        #TODO implement energy countdown to promote teamwork through revivals
+        #self.max_energy = self.config.player_max_energy
+        #self.min_energy = self.config.player_min_energy
+        #self.energy = self.config.player_max_energy
+        
+        self.player_idx = idx
         self.team = team
-        self.tile_speeds = tile_speeds
+        self.the_map = the_map
+        self.sprite = None
         
         #current status
-        self.speed = self.max_speed
-        self.energy = self.max_energy
+        self.speed = self.config.player_max_speed
         self.has_flag = False
         self.is_incapacitated = False
+        self.incapacitated_countdown = 0
+        self.in_enemy_territory = False
+        self.in_flag_area = False
         
-        self.x = 0
-        self.y = 0
+        self.x = x
+        self.y = y
+        self.tile_col, self.tile_row = self.the_map.xy_to_cr(x, y)
         
     
     def update(self, frame):
+        #get movement action based on map, players, flag percepts
         action = self.get_action()
         
+        #first test to see if the action is legal
         new_x, new_y = self.x, self.y
+        
+        #regardless of legality of move, animate the sprite
         
         #move right
         if action=='d':
@@ -40,7 +64,7 @@ class Player():
             new_x += self.speed
             
         #move down
-        elif action=='s'
+        elif action=='s':
             pyg.changeSpriteImage(self.sprite, 1*8+frame)    
             new_y += self.speed
             
@@ -58,30 +82,54 @@ class Player():
         else:
             pyg.changeSpriteImage(self.sprite, 1 * 8 + 5)
             
-        tile_col = math.floor(new_x // self.config.terrain_tile_size)
-        tile_row = math.floor(new_y // self.config.terrain_tile_size)
-        speed = int(self.tile_speeds[tile_row, tile_col])
-        
-        if speed:
-            #for debugging
-            if speed != self.speed:
-                print('player moved from %s to %s' % (self.speed_terr[self.speed], self.speed_terr[speed]))
-                
-            self.speed = speed
-            self.x = new_x
-            self.y = new_y
-            
-            pyg.moveSprite(self.sprite, self.x, self.y)
+        #only allow movement if not incapacitated
+        if not self.is_incapacitated:
+            #determine which tile/grid of the map would this put the player in    
+            tile_col, tile_row = self.the_map.xy_to_cr(new_x, new_y)
+
+            speed = self.the_map.get_speed(tile_col, tile_row)
+
+            self.in_enemy_territory = self.the_map.in_enemy_territory(self.team, tile_col)
+            self.in_flag_area = self.the_map.in_flag_area(self.team, tile_col, tile_row)
+
+            if speed:
+                #for debugging
+                if self.config.verbose and speed != self.speed:
+                    print('%s player %d moved from %s to %s' % (self.team, self.player_idx, self.speed_terr[self.speed], self.speed_terr[speed]))
+
+                self.speed = speed
+                self.x = new_x
+                self.y = new_y
+
+                pyg.moveSprite(self.sprite, self.x, self.y)
             
         
     def get_action(self):
         pass
     
     
+    def update_sprite(self, sprite):
+        pyg.hideSprite(self.sprite)
+        self.sprite = sprite
+        pyg.moveSprite(self.sprite, self.x, self.y, centre=True)
+        pyg.showSprite(self.sprite)
+        
+    
     
 class HumanPlayer(Player):
-    def __init__(self, sprite, team, tile_speeds, config):
-        super().__init__(sprite, team, tile_speeds, config)
+    def __init__(self, x, y, idx, team, the_map, config):
+        super().__init__(x, y, idx, team, the_map, config)
+        #load sprites
+        #there are flag holding, nonflag holding, and incapacitated sprites for blue player (human), blue agent, red agent
+        #current sprite may change to flag holding or incapacitated sprite
+        self.default_sprite = pyg.makeSprite(self.config.blue_player_sprite_path, 32)
+        self.holding_flag_sprite = pyg.makeSprite(self.config.blue_player_with_flag_sprite_path, 32)
+        self.incapacitated_sprite = pyg.makeSprite(self.config.blue_player_incapacitated_sprite_path, 32)
+                                                   
+        self.sprite = self.default_sprite
+        
+        pyg.moveSprite(self.sprite, x, y, centre=True)
+        pyg.showSprite(self.sprite)
         
         
     def get_action(self):
@@ -106,9 +154,32 @@ class HumanPlayer(Player):
     
     
 class AgentPlayer(Player):
-    def __init__(self, sprite, team, tile_speeds, config):
-        super().__init__(sprite, team, tile_speeds, config)
-    
+    def __init__(self, x, y, idx, team, the_map, config):
+        super().__init__(x, y, idx, team, the_map, config)
+        self.prev_dir = 'a' if team=='red' else 'd'
+        
+        #load sprites
+        #there are flag holding, nonflag holding, and incapacitated sprites for blue player (human), blue agent, red agent
+        #current sprite may change to flag holding or incapacitated sprite
+        if team=='blue':
+            self.default_sprite = pyg.makeSprite(self.config.blue_agent_sprite_path, 32)
+            self.holding_flag_sprite = pyg.makeSprite(self.config.blue_agent_with_flag_sprite_path, 32)
+            self.incapacitated_sprite = pyg.makeSprite(self.config.blue_agent_incapacitated_sprite_path, 32)
+        else:
+            self.default_sprite = pyg.makeSprite(self.config.red_agent_sprite_path, 32)
+            self.holding_flag_sprite = pyg.makeSprite(self.config.red_agent_with_flag_sprite_path, 32)
+            self.incapacitated_sprite = pyg.makeSprite(self.config.red_agent_incapacitated_sprite_path, 32)
+            
+        self.sprite = self.default_sprite
+        
+        pyg.moveSprite(self.sprite, x, y, centre=True)
+        pyg.showSprite(self.sprite)
+        
         
     def get_action(self):
-        return 'a'
+        if random.randint(1,20) == 1:
+            self.prev_dir = random.choice(['a','w','s','d'])
+            
+        return self.prev_dir
+    
+    
