@@ -113,6 +113,7 @@ class Config():
         self.red_team_size = 5
         
         #player/agent
+        #TODO - variable speed and energy countdown
         self.player_max_speed = 10
         self.player_max_energy = 100
         self.player_min_energy = 10
