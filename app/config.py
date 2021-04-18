@@ -3,7 +3,9 @@ import os
 
 
 class Config():
-    def __init__(self):
+    def __init__(self, verbose=False):
+        self.verbose = verbose
+        
         #constants
         
         self.map_border_size = 20
