@@ -113,12 +113,13 @@ class Config():
         self.red_team_size = 5
         
         #player/agent
+        #TODO - variable speed and energy countdown
         self.player_max_speed = 10
         self.player_max_energy = 100
         self.player_min_energy = 10
         
         #terrain
-        self.terrain_speeds = {'lake':0, 'swamp':6, 'plain':10, 'hill':4, 'mountain':2}
+        self.terrain_speeds = {'lake':0, 'swamp':7, 'plain':10, 'hill':4, 'mountain':2}
 
         
         
@@ -130,3 +131,5 @@ class Config():
         self.menu_regenerate_map_button_image_path = '%s/menu_background.png' % self.menu_path
         self.menu_start_game_button_image_path = '%s/menu_background.png' % self.menu_path
         self.menu_map_display_image_path = '%s/menu_map_display.png' % self.menu_path
+        
+        
