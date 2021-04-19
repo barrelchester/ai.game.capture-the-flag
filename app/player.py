@@ -95,7 +95,7 @@ class Player():
             if speed:
                 #for debugging
                 if self.config.verbose and speed != self.speed:
-                    print('%s player %d moved from %s to %s' % (self.team, self.player_idx, self.speed_terr[self.speed], self.speed_terr[speed]))
+                    print('%s player %d moved from %s to %s' % (self.speed_terr[self.speed], self.speed_terr[speed]))
 
                 self.speed = speed
                 self.x = new_x

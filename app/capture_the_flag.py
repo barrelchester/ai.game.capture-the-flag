@@ -13,7 +13,7 @@ import pygame_utils as pyg
 
 
 class CaptureTheFlag():
-    def __init__(self, config, new_map=False):
+    def __init__(self, config, new_map_seed=False):
         '''
         Load background, icon, music, sounds, create flag sprites and areas, create players
         '''
@@ -32,7 +32,7 @@ class CaptureTheFlag():
         self.screen_divide_x = (self.config.screen_width//2)
         
         #stores location of terrain speeds including 0 (not allowed areas), flag location, player locations
-        self.the_map = TheMap(self.config, new_map)
+        self.the_map = TheMap(self.config, new_map_seed)
         
         
         #set screen, title, icon, background, music
@@ -395,6 +395,6 @@ class CaptureTheFlag():
 if __name__=='__main__':
     print('Movement Keys: W=north, S=south, A=west, D=east') 
     config = Config(verbose=False)
-    game = CaptureTheFlag(config, new_map=False)
+    game = CaptureTheFlag(config, new_map_seed=0)
     game.run()
     

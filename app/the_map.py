@@ -3,18 +3,18 @@ from map_generator import MapGenerator
 
 
 class TheMap():
-    def __init__(self, config, new_map=False):
+    def __init__(self, config, new_map_seed=0):
         self.config = config
         self.border_size = self.config.map_border_size
         self.tile_size = self.config.terrain_tile_size
         
         #make the map and get the terrain speeds associated with the map
-        if new_map:
+        if new_map_seed:
             if self.config.verbose:
                 print('Creating new map')
             tile_cols, tile_rows = 40, 30
             pixel_dims = (self.tile_size * tile_cols, self.tile_size * tile_rows)
-            self.tile_speeds, self.map_path = MapGenerator(self.config, seed=13).generate_map(pixel_dims, 
+            self.tile_speeds, self.map_path = MapGenerator(self.config, seed=new_map_seed).generate_map(pixel_dims, 
                                                                         save_path = self.config.maps_path)
         else:
             if self.config.verbose:
