@@ -24,26 +24,27 @@ class TheMap():
             
         self.middle_tile = self.tile_speeds.shape[1]//2
             
-        self.blue_flag_tile = (0,0)
+        self.blue_flag_xy = (0,0)
         self.blue_flag_area_tiles = []
-        self.red_flag_tile = (0,0)
+        self.red_flag_xy = (0,0)
         self.red_flag_area_tiles = []
         
-        self.player_tile = (0,0)
-        self.blue_agent_tiles = []
-        self.red_agent_tiles = []
+        self.blue_flag_in_play = False
+        self.red_flag_in_play = False
+        
+        #store [team][player_idx]:{'xy':(x,y), 'has_flag':, 'is_incapacitated':, 'in_enemy_territory'}
+        self.agent_info = {'blue':{}, 'red':{}}
         
         
     def set_flag_location(self, team, flag_x, flag_y):
-        flag_c, flag_r = self.xy_to_cr(flag_x, flag_y)
-        
         if team=='blue':
-            self.blue_flag_tile = (flag_r, flag_c)
+            self.blue_flag_xy = (flag_x, flag_y)
         else:
-            self.red_flag_tile = (flag_r, flag_c)
+            self.red_flag_xy = (flag_x, flag_y)
         
         #get tiles in flag area
         flag_area_border_tiles = ((self.config.flag_area_size//self.tile_size) // 2) - 1
+        flag_c, flag_r = self.xy_to_cr(flag_x, flag_y)
         for r in range(flag_r - flag_area_border_tiles, flag_r + flag_area_border_tiles + 1):
             for c in range(flag_c - flag_area_border_tiles, flag_c + flag_area_border_tiles + 1):
                 if team=='blue':
@@ -58,7 +59,6 @@ class TheMap():
         
     def get_not_allowed_tiles(self):
         idx = np.where(self.tile_speeds==0)
-        
         return list(zip(idx[0].tolist(), idx[1].tolist()))
     
     
