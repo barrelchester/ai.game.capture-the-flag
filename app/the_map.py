@@ -3,18 +3,18 @@ from map_generator import MapGenerator
 
 
 class TheMap():
-    def __init__(self, config, new_map=False):
+    def __init__(self, config, new_map_seed=0):
         self.config = config
         self.border_size = self.config.map_border_size
         self.tile_size = self.config.terrain_tile_size
         
         #make the map and get the terrain speeds associated with the map
-        if new_map:
+        if new_map_seed:
             if self.config.verbose:
                 print('Creating new map')
             tile_cols, tile_rows = 40, 30
             pixel_dims = (self.tile_size * tile_cols, self.tile_size * tile_rows)
-            self.tile_speeds, self.map_path = MapGenerator(self.config, seed=13).generate_map(pixel_dims, 
+            self.tile_speeds, self.map_path = MapGenerator(self.config, seed=new_map_seed).generate_map(pixel_dims, 
                                                                         save_path = self.config.maps_path)
         else:
             if self.config.verbose:
@@ -24,26 +24,27 @@ class TheMap():
             
         self.middle_tile = self.tile_speeds.shape[1]//2
             
-        self.blue_flag_tile = (0,0)
+        self.blue_flag_xy = (0,0)
         self.blue_flag_area_tiles = []
-        self.red_flag_tile = (0,0)
+        self.red_flag_xy = (0,0)
         self.red_flag_area_tiles = []
         
-        self.player_tile = (0,0)
-        self.blue_agent_tiles = []
-        self.red_agent_tiles = []
+        self.blue_flag_in_play = False
+        self.red_flag_in_play = False
+        
+        #store [team][player_idx]:{'xy':(x,y), 'has_flag':, 'is_incapacitated':, 'in_enemy_territory'}
+        self.agent_info = {'blue':{}, 'red':{}}
         
         
     def set_flag_location(self, team, flag_x, flag_y):
-        flag_c, flag_r = self.xy_to_cr(flag_x, flag_y)
-        
         if team=='blue':
-            self.blue_flag_tile = (flag_r, flag_c)
+            self.blue_flag_xy = (flag_x, flag_y)
         else:
-            self.red_flag_tile = (flag_r, flag_c)
+            self.red_flag_xy = (flag_x, flag_y)
         
         #get tiles in flag area
         flag_area_border_tiles = ((self.config.flag_area_size//self.tile_size) // 2) - 1
+        flag_c, flag_r = self.xy_to_cr(flag_x, flag_y)
         for r in range(flag_r - flag_area_border_tiles, flag_r + flag_area_border_tiles + 1):
             for c in range(flag_c - flag_area_border_tiles, flag_c + flag_area_border_tiles + 1):
                 if team=='blue':
@@ -58,7 +59,6 @@ class TheMap():
         
     def get_not_allowed_tiles(self):
         idx = np.where(self.tile_speeds==0)
-        
         return list(zip(idx[0].tolist(), idx[1].tolist()))
     
     

@@ -15,6 +15,9 @@ class Player():
         '''
         self.config = config
         
+        #needed for preventing sprite from overlapping a 0 speed location
+        self.half_size = config.terrain_tile_size//2
+        
         #w,a,d,s are the keyboard directions for up, left, right, down
         self.actions = ['w', 'a', 'd', 's']
         
@@ -47,14 +50,18 @@ class Player():
         self.x = x
         self.y = y
         self.tile_col, self.tile_row = self.the_map.xy_to_cr(x, y)
+        self.blocked_countdown = 0
         
     
     def update(self, frame):
         #get movement action based on map, players, flag percepts
         action = self.get_action()
         
-        #first test to see if the action is legal
+        #center of sprite, before moving the sprite test to see if the position is legal
         new_x, new_y = self.x, self.y
+        
+        #for checking sprite overlap of 0 speed area, only one side needs to be checked
+        delta = (0,0)
         
         #regardless of legality of move, animate the sprite
         
@@ -62,21 +69,26 @@ class Player():
         if action=='d':
             pyg.changeSpriteImage(self.sprite, 0*8+frame)    
             new_x += self.speed
+            #new_x is center of sprite, adding half size in movement direction prevents overlap 0 speed tile
+            delta = (self.half_size, 0)
             
         #move down
         elif action=='s':
             pyg.changeSpriteImage(self.sprite, 1*8+frame)    
             new_y += self.speed
+            delta = (0, self.half_size)
             
         #move left
         elif action=='a':
             pyg.changeSpriteImage(self.sprite, 2*8+frame)    
             new_x -= self.speed
+            delta = (-self.half_size, 0)
             
         #move up
         elif action=='w':
             pyg.changeSpriteImage(self.sprite, 3*8+frame)
             new_y -= self.speed
+            delta = (0, -self.half_size)
             
         #stay still
         else:
@@ -85,7 +97,7 @@ class Player():
         #only allow movement if not incapacitated
         if not self.is_incapacitated:
             #determine which tile/grid of the map would this put the player in    
-            tile_col, tile_row = self.the_map.xy_to_cr(new_x, new_y)
+            tile_col, tile_row = self.the_map.xy_to_cr(new_x + delta[0], new_y + delta[1])
 
             speed = self.the_map.get_speed(tile_col, tile_row)
 
@@ -93,15 +105,23 @@ class Player():
             self.in_flag_area = self.the_map.in_flag_area(self.team, tile_col, tile_row)
 
             if speed:
+                self.blocked_countdown = 0
+                
                 #for debugging
                 if self.config.verbose and speed != self.speed:
-                    print('%s player %d moved from %s to %s' % (self.team, self.player_idx, self.speed_terr[self.speed], self.speed_terr[speed]))
+                    print('%s player %d moved from %s to %s, speed=%d, yx=(%d, %d), rc=(%d, %d)' % (self.team, self.player_idx, 
+                           self.speed_terr[self.speed], self.speed_terr[speed], speed, new_y, new_x, tile_row, tile_col))
 
                 self.speed = speed
                 self.x = new_x
                 self.y = new_y
+                
+                #update global map with change in position
+                self.the_map.agent_info[self.team][self.player_idx]['xy'] = (new_x, new_y)
 
                 pyg.moveSprite(self.sprite, self.x, self.y)
+            else:
+                self.blocked_countdown = 20
             
         
     def get_action(self):
@@ -154,6 +174,9 @@ class HumanPlayer(Player):
     
     
 class AgentPlayer(Player):
+    '''
+    Moves around randomly
+    '''
     def __init__(self, x, y, idx, team, the_map, config):
         super().__init__(x, y, idx, team, the_map, config)
         self.prev_dir = 'a' if team=='red' else 'd'
@@ -181,5 +204,91 @@ class AgentPlayer(Player):
             self.prev_dir = random.choice(['a','w','s','d'])
             
         return self.prev_dir
+    
+    
+    
+class GreedyGoalAgentPlayer(AgentPlayer):
+    '''
+    If the flag is not in play head directly for it 
+    If player has the flag head directly for flag area
+    If opponent has flag head directly toward them
+    '''
+    def __init__(self, x, y, idx, team, the_map, config):
+        super().__init__(x, y, idx, team, the_map, config)
+        
+        
+    def get_action(self):
+        action = ''
+        
+        #if blocked going direct way, try going a random direction for a while
+        if self.blocked_countdown:
+            if self.blocked_countdown==20:
+                dirs = ['a','w','s','d']
+                dirs.remove(self.prev_dir)
+                self.prev_dir = random.choice(dirs)
+                
+            self.blocked_countdown -= 1
+            
+            if random.randint(1,10) == 1:
+                self.prev_dir = random.choice(['a','w','s','d'])
+                
+            action = self.prev_dir
+            if self.config.verbose:
+                print('%s player %d is blocked, trying different way: %s' % (self.team, self.player_idx, action))
+                
+            return action
+        
+        
+        #head to flag home area
+        if self.has_flag:
+            if self.team=='blue':
+                action = self.__get_direction_to_xy(self.the_map.blue_flag_xy)
+            else:
+                action = self.__get_direction_to_xy(self.the_map.red_flag_xy)
+            if self.config.verbose:
+                print('%s player %d heading to flag area: %s' % (self.team, self.player_idx, action))
+            return action
+        
+                
+        #the flag is being run by an opponent, try to tag them
+        if self.the_map.blue_flag_in_play and self.team=='blue':
+            agent_info = self.the_map.agent_info['red']
+            for idx, info in agent_info.items():
+                if info['has_flag']:
+                    action = self.__get_direction_to_xy(info['xy'])
+                    if self.config.verbose:
+                        print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, action))
+            return action
+        if self.the_map.red_flag_in_play and self.team=='red':
+            agent_info = self.the_map.agent_info['blue']
+            for idx, info in agent_info.items():
+                if info['has_flag']:
+                    action = self.__get_direction_to_xy(info['xy'])
+                    if self.config.verbose:
+                        print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, action))
+            return action
+                
+        
+        #head to flag
+        if self.team=='blue' and not self.the_map.red_flag_in_play:
+            action = self.__get_direction_to_xy(self.the_map.red_flag_xy)
+            if self.config.verbose:
+                print('%s player %d heading to flag: %s' % (self.team, self.player_idx, action))
+        elif self.team=='red' and not self.the_map.blue_flag_in_play:
+            action = self.__get_direction_to_xy(self.the_map.blue_flag_xy)
+            if self.config.verbose:
+                print('%s player %d heading to flag: %s' % (self.team, self.player_idx, action))
+        
+           
+        return action
+    
+    
+    def __get_direction_to_xy(self, xy):
+        x,y = xy
+        delta_x, delta_y = x - self.x, y - self.y
+        if abs(delta_x)>abs(delta_y):
+            return 'a' if delta_x<0 else 'd'
+        else:
+            return 'w' if delta_y<0 else 's'
     
     

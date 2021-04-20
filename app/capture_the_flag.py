@@ -6,20 +6,20 @@ import pygame
 from config import Config
 from map_generator import MapGenerator
 from the_map import TheMap
-from player import HumanPlayer, AgentPlayer
+from player import HumanPlayer, AgentPlayer, GreedyGoalAgentPlayer
 
 #helpful pygame wrapper
 import pygame_utils as pyg
 
 
 class CaptureTheFlag():
-    def __init__(self, config, new_map=False):
+    def __init__(self, config, new_map_seed=0):
         '''
         Load background, icon, music, sounds, create flag sprites and areas, create players
         '''
         self.config = config
         
-        #load sounds
+        #sounds
         self.grabbed_flag_sound = pyg.makeSound(self.config.grabbed_flag_sound)
         self.incapacitated_sound = pyg.makeSound(self.config.incapacitated_sound)
         self.dropped_flag_sound = pyg.makeSound(self.config.dropped_flag_sound)
@@ -32,7 +32,7 @@ class CaptureTheFlag():
         self.screen_divide_x = (self.config.screen_width//2)
         
         #stores location of terrain speeds including 0 (not allowed areas), flag location, player locations
-        self.the_map = TheMap(self.config, new_map)
+        self.the_map = TheMap(self.config, new_map_seed)
         
         
         #set screen, title, icon, background, music
@@ -52,17 +52,24 @@ class CaptureTheFlag():
     
         #create user player on blue team
         self.user_player = self.__make_player(allowed_blue_sprite_init_tiles, idx=0, team='blue', agent=False)
-        #set location in map
-        self.the_map.player_tile = (self.user_player.tile_row, self.user_player.tile_col)
-        
+        #set info in map
+        player_info = {'xy':(self.user_player.x, self.user_player.y), 
+                       'has_flag':False,
+                       'is_incapacitated':False, 
+                       'in_enemy_territory':False}
+        self.the_map.agent_info['blue'][self.user_player.player_idx] = player_info
+            
         #create other blue players
         self.blue_players = [self.user_player]
         for i in range(self.config.blue_team_size - 1):
             blue_player = self.__make_player(allowed_blue_sprite_init_tiles, idx=i+1, team='blue')
             self.blue_players.append(blue_player)
-            
-            #add to map
-            self.the_map.blue_agent_tiles.append((blue_player.tile_row, blue_player.tile_col))
+            #add player info to global map so others can access it
+            player_info = {'xy':(blue_player.x, blue_player.y), 
+                           'has_flag':False,
+                           'is_incapacitated':False, 
+                           'in_enemy_territory':False}
+            self.the_map.agent_info['blue'][blue_player.player_idx] = player_info
 
             
         #get red side non-lake non border tile locations
@@ -73,16 +80,15 @@ class CaptureTheFlag():
         for i in range(self.config.red_team_size):
             red_player = self.__make_player(allowed_red_sprite_init_tiles, idx=i, team='red')
             self.red_players.append(red_player)
-            
-            #add to map
-            self.the_map.red_agent_tiles.append((red_player.tile_row, red_player.tile_col))
+            #add player info to global map so others can access it
+            player_info = {'xy':(red_player.x, red_player.y), 
+                           'has_flag':False,
+                           'is_incapacitated':False, 
+                           'in_enemy_territory':False}
+            self.the_map.agent_info['red'][red_player.player_idx] = player_info
             
         #all players
         self.players = self.blue_players + self.red_players
-        
-        #a double check to ensure multiple players can't have same flag
-        self.blue_flag_in_play = False
-        self.red_flag_in_play = False
         
     
     def run(self):
@@ -151,7 +157,6 @@ class CaptureTheFlag():
         
     def __get_state(self):
         '''Game logic here.'''
-        #TODO - this isn't used for much now, but we will want to make a lot of attributes/percepts available to players
         state = {'blue_wins':False, 'red_wins':False}
         
         #all states can be determined by what the players are touching and where they are
@@ -163,13 +168,11 @@ class CaptureTheFlag():
                 
                 #is countdown over?
                 if player.incapacitated_countdown<=0:
-                    if self.config.verbose:
-                        print('%s player is no longer incapacitated' % player.team)
+                    print('%s player is no longer incapacitated' % player.team)
                     self.__handle_revival(player)
                 #player revived - TODO use sprite group
                 elif self.__tagged_by_team_member(player):
-                    if self.config.verbose:
-                        print('%s player revived' % player.team)
+                    print('%s player revived' % player.team)
                     self.__handle_revival(player)
                 continue
                 
@@ -177,12 +180,10 @@ class CaptureTheFlag():
             #check for win condition
             if player.has_flag and player.in_flag_area:
                 if player.team=='blue':
-                    if self.config.verbose:
-                        print('blue wins')
+                    print('blue wins')
                     state['blue_wins']=True
                 else:
-                    if self.config.verbose:
-                        print('red wins')
+                    print('red wins')
                     state['red_wins']=True
                 break
                 
@@ -193,14 +194,12 @@ class CaptureTheFlag():
                 
                 
             #flag grabbed?
-            if not self.blue_flag_in_play and player.team=='red' and pyg.touching(player.sprite, self.blue_flag_sprite):
-                if self.config.verbose:
-                    print('%s player %d touched blue flag' % (player.team, player.player_idx))
+            if not self.the_map.blue_flag_in_play and player.team=='red' and pyg.touching(player.sprite, self.blue_flag_sprite):
+                print('%s player %d touched blue flag' % (player.team, player.player_idx))
                 self.__handle_flag_grabbed(player, self.blue_flag_sprite)
                 continue
-            elif not self.red_flag_in_play and player.team=='blue' and pyg.touching(player.sprite, self.red_flag_sprite):
-                if self.config.verbose:
-                    print('%s player %d touched blue flag' % (player.team, player.player_idx))
+            elif not self.the_map.red_flag_in_play and player.team=='blue' and pyg.touching(player.sprite, self.red_flag_sprite):
+                print('%s player %d touched blue flag' % (player.team, player.player_idx))
                 self.__handle_flag_grabbed(player, self.red_flag_sprite)
                 continue
         
@@ -209,14 +208,12 @@ class CaptureTheFlag():
             if player.in_enemy_territory or player.has_flag:
                 if player.team=='blue':
                     if any([pyg.touching(player.sprite, red_player.sprite)!=None for red_player in self.red_players]):
-                        if self.config.verbose:
-                            print('blue player tagged')
+                        print('blue player tagged')
                         self.__handle_tag(player)
                         continue
                 elif player.team=='red':
                     if any([pyg.touching(player.sprite, blue_player.sprite)!=None for blue_player in self.blue_players]):
-                        if self.config.verbose:
-                            print('red player tagged')
+                        print('red player tagged')
                         self.__handle_tag(player)
                         continue
         
@@ -229,12 +226,15 @@ class CaptureTheFlag():
         pyg.playSound(self.grabbed_flag_sound)
         pyg.hideSprite(flag_sprite)
         player.has_flag = True
-        #player.sprite = player.holding_flag_sprite
         player.update_sprite(player.holding_flag_sprite)
+        
+        #update the global map
         if player.team=='blue':
-            self.red_flag_in_play = False
+            self.the_map.red_flag_in_play = True
+            self.the_map.agent_info['blue'][player.player_idx]['has_flag'] = True
         else:
-            self.blue_flag_in_play = False
+            self.the_map.blue_flag_in_play = True
+            self.the_map.agent_info['red'][player.player_idx]['has_flag'] = True
         
         
     def __handle_tag(self, player):
@@ -246,11 +246,19 @@ class CaptureTheFlag():
             if player.team=='blue':
                 pyg.moveSprite(self.red_flag_sprite, x=self.red_flag_x, y=self.red_flag_y, centre=True)
                 pyg.showSprite(self.red_flag_sprite)
-                self.red_flag_in_play = False
+                
+                #update the global map
+                self.the_map.red_flag_in_play = False
+                self.the_map.agent_info['blue'][player.player_idx]['has_flag'] = False
+                self.the_map.agent_info['blue'][player.player_idx]['is_incapacitated'] = True
             else:
                 pyg.moveSprite(self.blue_flag_sprite, x=self.blue_flag_x, y=self.blue_flag_y, centre=True)
                 pyg.showSprite(self.blue_flag_sprite)
-                self.blue_flag_in_play = False
+                
+                #update the global map
+                self.the_map.blue_flag_in_play = False
+                self.the_map.agent_info['red'][player.player_idx]['has_flag'] = False
+                self.the_map.agent_info['red'][player.player_idx]['is_incapacitated'] = True
         else:
             pyg.playSound(self.tagged_sound)
             
@@ -282,6 +290,12 @@ class CaptureTheFlag():
         #player.energy = self.config.player_max_energy
         player.update_sprite(player.default_sprite)
         player.incapacitated_countdown = 0
+        
+        #update global map
+        if player.team=='blue':
+            self.the_map.agent_info['blue'][player.player_idx]['is_incapacitated'] = False
+        else:
+            self.the_map.agent_info['red'][player.player_idx]['is_incapacitated'] = False
         
         
     def __setup(self, map_path):
@@ -386,7 +400,8 @@ class CaptureTheFlag():
         if not agent: #this will be a different sprite
             player = HumanPlayer(player_x_pos, player_y_pos, idx, team, self.the_map, self.config)
         else:
-            player = AgentPlayer(player_x_pos, player_y_pos, idx, team, self.the_map, self.config)
+            #player = AgentPlayer(player_x_pos, player_y_pos, idx, team, self.the_map, self.config)
+            player = GreedyGoalAgentPlayer(player_x_pos, player_y_pos, idx, team, self.the_map, self.config)
 
         return player
     
@@ -395,6 +410,6 @@ class CaptureTheFlag():
 if __name__=='__main__':
     print('Movement Keys: W=north, S=south, A=west, D=east') 
     config = Config(verbose=False)
-    game = CaptureTheFlag(config, new_map=False)
+    game = CaptureTheFlag(config, new_map_seed=0)
     game.run()
     
