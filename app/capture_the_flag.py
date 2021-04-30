@@ -96,7 +96,8 @@ class CaptureTheFlag():
     def run(self):
         nextFrame = pyg.clock()
         frame = 0
-
+        pyg.pause(3000)
+        
         while True:
             # quit?
             for event in pygame.event.get():
@@ -402,26 +403,29 @@ class CaptureTheFlag():
                 print('%s-%d player on r=%s, c=%d, x=%d, y=%d' % (team, idx, player_r_idx, player_c_idx, player_x_pos, player_y_pos))
             else:
                 print('%s-%d %s (%s, using %s) on r=%s, c=%d, x=%d, y=%d' % (team, idx, 'agent' if agent else 'player',
-                    self.agent_type, self.blue_nav_type if team=='blue' else self.red_nav_type,
+                    self.blue_agent_type if team=='blue' else self.red_agent_type,
+                    self.blue_nav_type if team=='blue' else self.red_nav_type,
                     player_r_idx, player_c_idx, player_x_pos, player_y_pos))
 
         if not agent:  # this will be a different sprite
-            player = HumanPlayer(player_x_pos, player_y_pos, idx, team, self.the_map, self.config)
+            player = HumanPlayer(player_x_pos, player_y_pos, idx, team, '', self.the_map, self.config)
         else:
             #select nav type
             if team=='blue':
                 nav_type = self.blue_nav_type
+                agent_type = self.blue_agent_type
             else:
                 nav_type = self.red_nav_type
+                agent_type = self.red_agent_type
                 
             #instantiate agent type
-            if self.agent_type=='random':
+            if agent_type=='random':
                 player = AgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
-            elif self.agent_type=='reflex':
+            elif agent_type=='reflex':
                 player = ReflexAgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
-            elif self.agent_type=='high_level_planning':
+            elif agent_type=='high_level_planning':
                 player = HighLevelPlanningAgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
-            elif self.agent_type=='reinforcement_learning':
+            elif agent_type=='reinforcement_learning':
                 player = ReinforcementLearningAgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
 
         return player
