@@ -1,6 +1,7 @@
 import random
 import pygame_utils as pyg
 from navigation import Navigation
+from high_level_policy import HighLevelPolicy
 
 
 # human controlled or AI Agent controlled player classes
@@ -342,11 +343,10 @@ class ReflexAgentPlayer(AgentPlayer):
             if random.randint(1, 10) == 1:
                 self.prev_dir = random.choice(['a', 'w', 's', 'd'])
 
-            self.goal_actions = [self.prev_dir]
             if self.config.verbose:
-                print('%s player %d is blocked, trying different way: %s' % (self.team, self.player_idx, self.goal_actions))
+                print('%s player %d is blocked, trying different way: %s' % (self.team, self.player_idx, self.prev_dir))
 
-            return self.goal_actions.pop()
+            return self.prev_dir
         
 
         # head to flag home area if has flag and not already heading there
@@ -357,6 +357,7 @@ class ReflexAgentPlayer(AgentPlayer):
                 self.current_goal='team_flag_area'
 
                 if self.team == 'blue':
+                    #do I need to reverse these?
                     self.goal_actions = self.get_direction_to_xy(self.the_map.blue_flag_xy)
                 else:
                     self.goal_actions = self.get_direction_to_xy(self.the_map.red_flag_xy)
@@ -436,16 +437,130 @@ class HighLevelPlanningAgentPlayer(AgentPlayer):
     '''
     def __init__(self, x, y, idx, team, nav_type, the_map, config):
         super().__init__(x, y, idx, team, nav_type, the_map, config)
-
+        self.policy = HighLevelPolicy('q.npy')
+        self.prev_hls = ()
+        self.prev_hla = ''
+        
         
     def get_action(self):
-        '''Get action based on current state and current goal, change goal if state changed'''
-        pass
+        '''Decide high level action based on current state and current goal, change goal if state changed'''
+        hls = self.policy.get_high_level_state(self, self.the_map)
+        
+        #only change HLA if state is different
+        if hls==self.prev_hls and self.goal_actions:
+            return self.goal_actions.pop()
+
+        #choose best HLA
+        hla = self.choose_hla(hls)
+        
+        self.goal_actions = self.hla_to_actions(hla)
+        
+        if self.goal_actions:
+            action = self.goal_actions.pop()
+        else:
+            action = self.prev_action
+            
+        return action
+    
+    
+    def choose_hla(self, hls):
+        allowed_hlas = self.policy.get_available_hlas(self, self.the_map, hls)   
+        
+        if sum(hls)==0 or sum(hls)==1 and hls[self.policy.high_level_states.index('self_in_enemy_territory')]:
+            hla='go_opponent_flag'
+            
+        elif hls[self.policy.high_level_states.index('self_incapacitated')]: 
+            hla='wait'
+            
+        elif hls[self.policy.high_level_states.index('self_has_flag')]: 
+            hla='go_team_flag_area'
+            
+        elif hls[self.policy.high_level_states.index('team_flag_in_play')]: 
+            hla='go_opponent_flag_carrier'
+            
+        elif hls[self.policy.high_level_states.index('nearest_teammate_incapacitated')]: 
+            hla='go_nearest_incapacitated_teammate'
+            
+        elif not hls[self.policy.high_level_states.index('self_in_enemy_territory')]: 
+            hla='go_nearest_opponent'
+            
+        if not hla in allowed_hlas:
+            hla = 'go_opponent_flag'
+            
+        return hla
+    
+        
+    def hla_to_actions(self, hla):
+        opponent_team = 'red' if self.team=='blue' else 'blue'
+        
+        if hla=='random':
+            if random.randint(1,20) == 1:
+                self.prev_dir = random.choice(['a','w','s','d'])
+            self.goal_actions = [self.prev_dir]
+            
+        elif hla=='go_opponent_flag':
+            xy = self.the_map.red_flag_xy if self.team=='blue' else self.the_map.blue_flag_xy
+            self.goal_actions = self.get_direction_to_xy(xy)
+            
+        elif hla=='go_team_flag_area':
+            xy = self.the_map.blue_flag_xy if self.team=='blue' else self.the_map.red_flag_xy
+            self.goal_actions = self.get_direction_to_xy(xy)
+            
+        elif hla=='go_opponent_flag_carrier':
+            for info in self.the_map.agent_info[opponent_team].values():
+                if info['has_flag']:
+                    self.goal_actions = [self.get_manhattan_direction_to_xy(info['xy'])]
+                    
+        elif hla=='go_nearest_opponent':
+            info = self.get_closest_player_info_by_team(opponent_team)
+            self.goal_actions = [self.get_manhattan_direction_to_xy(info['xy'])]
+            
+        elif hla=='go_nearest_teammate':
+            info = self.get_closest_player_info_by_team(self.team)
+            self.goal_actions = self.get_direction_to_xy(info['xy'])
+            
+        elif hla=='go_nearest_incapacitated_teammate':
+            info = self.get_closest_incapacitated_player_info_by_team(self.team)
+            self.goal_actions = self.get_direction_to_xy(info['xy'])
+            
+        elif hla=='gaurd_nearest_teammate':
+            info = self.get_closest_player_info_by_team(self.team)
+            opp_info = self.get_closest_player_info_to_xy_by_team(info['xy'], opponent_team)
+            self.goal_actions = self.go_between(info['xy'], opp_info['xy'])
+            
+        elif hla=='gaurd_teammate_flag_carrier':
+            for info in self.the_map.agent_info[self.team].values():
+                if info['has_flag']:
+                    self.goal_actions = self.get_direction_to_xy(info['xy'])
+                    
+        elif hla=='gaurd_team_flag_area':
+            xy1 = self.the_map.blue_flag_xy if self.team=='blue' else self.the_map.red_flag_xy
+            info = self.get_closest_player_info_to_xy_by_team(xy1, opponent_team)
+            self.goal_actions = self.go_between(xy1, info['xy'])
+            
+        elif hla=='guard_opponent_flag_area':
+            xy1 = self.the_map.red_flag_xy if self.team=='blue' else self.the_map.blue_flag_xy
+            info = self.get_closest_player_info_to_xy_by_team(xy1, opponent_team)
+            self.goal_actions = self.go_between(xy1, info['xy'])
+            
+        elif hla=='run_away_from_nearest_opponent':
+            info = self.get_closest_player_info_by_team(opponent_team)
+            self.goal_actions = [self.get_manhattan_direction_away_from(info['xy'])]
+            
+        elif hla=='run_away_from_opponents_centroid':
+            xs, ys = [],[]
+            for info in self.the_map.agent_info[opponent_team].values():
+                x,y = info['xy']
+                xs.append(x)
+                ys.append(y)
+            mean_xy = (sum(xs)/len(xs), sum(ys)/len(ys))
+            self.goal_actions = [self.get_manhattan_direction_away_from(mean_xy)]
+            
+        return goal_actions
     
     
     
-    
-class ReinforcementLearningAgentPlayer(AgentPlayer):
+class ReinforcementLearningAgentPlayer(HighLevelPlanningAgentPlayer):
     '''
     Intelligent model-based agent that transforms percepts into high level states
     and chooses a high level plan in response by utilizing a trained q-value table. 
@@ -455,7 +570,21 @@ class ReinforcementLearningAgentPlayer(AgentPlayer):
 
         
     def get_action(self):
-        '''Get action based on current state and current goal, change goal if state changed'''
-        pass
+        '''Select action based on expected utility from a learned q table.'''
+        hls = self.policy.get_high_level_state(self, self.the_map)
+
+        #only change HLA if state is different
+        if hls==self.prev_hls and self.goal_actions:
+            return self.goal_actions.pop()
+        
+        hla = self.policy.get_high_level_action(self, self.the_map, with_probability=False)
     
+        self.goal_actions = self.hla_to_actions(hla)
+        
+        if self.goal_actions:
+            action = self.goal_actions.pop()
+        else:
+            action = self.prev_action
+            
+        return action
     

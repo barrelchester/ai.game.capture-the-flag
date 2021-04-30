@@ -39,9 +39,9 @@ class HighLevelPolicy:
         
         #states seen in 10K games
         self.state_probs = {}
-        if os.path.exists('state_probs.pkl'):
-            with open('state_probs.pkl', 'rb') as o:
-                self.state_probs = pickle.load(o)
+        #if os.path.exists('state_probs.pkl'):
+        #    with open('state_probs.pkl', 'rb') as o:
+        #        self.state_probs = pickle.load(o)
                 
         #if these are used there's a possibility a new state will appear
         if self.state_probs:
@@ -68,6 +68,11 @@ class HighLevelPolicy:
         #Create high level state from percept derived from player and map state
         high_level_state = self.get_high_level_state(player, the_map)
         
+        #this could be a never encountered before hls, if so, just return previous hla
+        if high_level_state not in self.high_level_state_codes:
+            print('New state found: ', high_level_state)
+            return self.prev_hla
+        
         state_idx = self.high_level_state_codes.index(high_level_state)
         
         #select best action with probability proportional to utility
@@ -79,6 +84,9 @@ class HighLevelPolicy:
             action_idx = self.high_level_actions.index(hla)
             value = self.q[state_idx, action_idx]
             action_utilities[hla] = value
+            if value>best_utility:
+                best_utility=value
+                best_hla=hla
         
         if with_probability:
             #normalize to positive
@@ -141,13 +149,14 @@ class HighLevelPolicy:
             return ['wait']
         
         hlas = self.high_level_actions.copy()
+        hlas.remove('wait')
         hlas.remove('go_opponent_flag_carrier')
         hlas.remove('gaurd_teammate_flag_carrier')
         hlas.remove('go_nearest_incapacitated_teammate')
         
         if (player.team=='blue' and the_map.blue_flag_in_play) or (player.team=='red' and the_map.red_flag_in_play):
             hlas.append('go_opponent_flag_carrier')
-        if (player.team=='blue' and the_map.red_flag_in_play) or (player.team=='red' and the_map.blue_flag_in_play):
+        if not player.has_flag and (player.team=='blue' and the_map.red_flag_in_play) or (player.team=='red' and the_map.blue_flag_in_play):
             hlas.append('gaurd_teammate_flag_carrier')
         if high_level_state[self.high_level_states.index('nearest_teammate_incapacitated')]==1:
             hlas.append('go_nearest_incapacitated_teammate')

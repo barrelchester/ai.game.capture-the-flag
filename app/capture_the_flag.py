@@ -8,8 +8,10 @@ from map_generator import MapGenerator
 from the_map import TheMap
 from player import *
 
+
 # helpful pygame wrapper
 import pygame_utils as pyg
+
 
 
 class CaptureTheFlag():
