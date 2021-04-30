@@ -1,11 +1,14 @@
 import random
-import heapq
 import pygame_utils as pyg
+from navigation import Navigation
 
 
 # human controlled or AI Agent controlled player classes
 
 class Player():
+    '''
+    Base player functionality and helper methods
+    '''
     def __init__(self, x, y, idx, team, the_map, config):
         '''
         x,y - the player/agent sprite starting location on the map
@@ -24,16 +27,6 @@ class Player():
         # for debugging
         self.speed_terr = {v: k for k, v in self.config.terrain_speeds.items()}
 
-        # configured values
-
-        # TODO - implement variable default speeds so some players are naturally faster
-        # self.max_speed = self.config.player_max_speed
-
-        # TODO implement energy countdown to promote teamwork through revivals
-        # self.max_energy = self.config.player_max_energy
-        # self.min_energy = self.config.player_min_energy
-        # self.energy = self.config.player_max_energy
-
         self.player_idx = idx
         self.team = team
         self.the_map = the_map
@@ -51,7 +44,10 @@ class Player():
         self.y = y
         self.tile_col, self.tile_row = self.the_map.xy_to_cr(x, y)
         self.blocked_countdown = 0
+        
+        self.navigation = Navigation(self.the_map)
 
+        
     def update(self, frame):
         # get movement action based on map, players, flag percepts
         action = self.get_action()
@@ -122,18 +118,105 @@ class Player():
                 pyg.moveSprite(self.sprite, self.x, self.y)
             else:
                 self.blocked_countdown = 20
+            
+            #update global map with change in position
+            self.the_map.agent_info[self.team][self.player_idx]['xy'] = (new_x, new_y)
+
+            pyg.moveSprite(self.sprite, self.x, self.y)
+            
 
     def get_action(self):
         pass
 
+    
     def update_sprite(self, sprite):
         pyg.hideSprite(self.sprite)
         self.sprite = sprite
         pyg.moveSprite(self.sprite, self.x, self.y, centre=True)
         pyg.showSprite(self.sprite)
+        
+        
+    def get_direction_to_xy(self, xy):
+        x,y = xy
+        delta_x, delta_y = x - self.x, y - self.y
+        if abs(delta_x)>abs(delta_y):
+            return 'a' if delta_x<0 else 'd'
+        else:
+            return 'w' if delta_y<0 else 's'
+        
+        
+    def get_direction_away_from(self, xy):
+        x,y = xy
+        delta_x, delta_y = self.x - x, self.y - y
+        if abs(delta_x)<abs(delta_y):
+            return 'a' if delta_x<0 else 'd'
+        else:
+            return 'w' if delta_y<0 else 's'
+        
+        
+    def go_between(self, xy1, xy2):
+        x1,y1 = xy1
+        x2,y2 = xy2
+        midx, midy = x1 + ((x2 - x1)/2), y1 + ((y2 - y1)/2)
+        return self.get_direction_to_xy((midx, midy))
+
+        
+    def get_closest_player_info_by_team(self, team):
+        best_dist=float('inf')
+        best_info = {}
+        
+        for idx, info in self.the_map.agent_info[team].items():
+            if idx==self.player_idx:
+                continue
+                
+            x, y = info['xy']
+            dist = np.sqrt((self.x - x)**2 + (self.y - y)**2)
+            if dist<best_dist:
+                best_info = info
+                
+        return best_info
+    
+    
+    def get_closest_player_info_to_xy_by_team(self, xy, team):
+        best_dist=float('inf')
+        best_info = {}
+        x1, y1 = xy
+        for idx, info in self.the_map.agent_info[team].items():
+            if idx==self.player_idx:
+                continue
+                
+            x2, y2 = info['xy']
+            dist = np.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+            if dist<best_dist:
+                best_info = info
+                
+        return best_info
+    
+    
+    def get_closest_incapacitated_player_info_by_team(self, team):
+        best_dist=float('inf')
+        best_info = {}
+        
+        for idx, info in self.the_map.agent_info[team].items():
+            if idx==self.player_idx:
+                continue
+                
+            if not info['is_incapacitated']:
+                continue
+                
+            x, y = info['xy']
+            dist = np.sqrt((self.x - x)**2 + (self.y - y)**2)
+            if dist<best_dist:
+                best_info = info
+                
+        return best_info
 
 
+    
 class HumanPlayer(Player):
+    '''
+    Simple wrapper around keyboard controls
+    '''
     def __init__(self, x, y, idx, team, the_map, config):
         super().__init__(x, y, idx, team, the_map, config)
         # load sprites
@@ -148,6 +231,7 @@ class HumanPlayer(Player):
         pyg.moveSprite(self.sprite, x, y, centre=True)
         pyg.showSprite(self.sprite)
 
+        
     def get_action(self):
         new_x, new_y = self.x, self.y
 
@@ -167,12 +251,12 @@ class HumanPlayer(Player):
         elif pyg.keyPressed("w"):
             return 'w'
 
+        
 
 class AgentPlayer(Player):
     '''
-    Moves around randomly
+    Agent base - moves around randomly
     '''
-
     def __init__(self, x, y, idx, team, the_map, config):
         super().__init__(x, y, idx, team, the_map, config)
         self.prev_dir = 'a' if team == 'red' else 'd'
@@ -194,6 +278,7 @@ class AgentPlayer(Player):
         pyg.moveSprite(self.sprite, x, y, centre=True)
         pyg.showSprite(self.sprite)
 
+        
     def get_action(self):
         if random.randint(1, 20) == 1:
             self.prev_dir = random.choice(['a', 'w', 's', 'd'])
@@ -201,16 +286,19 @@ class AgentPlayer(Player):
         return self.prev_dir
 
 
+    
 class GreedyGoalAgentPlayer(AgentPlayer):
     '''
+    Intelligent model-based reflex agent following these rules:
+    
     If the flag is not in play head directly for it
     If player has the flag head directly for flag area
     If opponent has flag head directly toward them
     '''
-
     def __init__(self, x, y, idx, team, the_map, config):
         super().__init__(x, y, idx, team, the_map, config)
 
+        
     def get_action(self):
         action = ''
 
@@ -235,9 +323,9 @@ class GreedyGoalAgentPlayer(AgentPlayer):
         # head to flag home area
         if self.has_flag:
             if self.team == 'blue':
-                action = self.__get_direction_to_xy(self.the_map.blue_flag_xy)
+                action = self.get_direction_to_xy(self.the_map.blue_flag_xy)
             else:
-                action = self.__get_direction_to_xy(self.the_map.red_flag_xy)
+                action = self.get_direction_to_xy(self.the_map.red_flag_xy)
             if self.config.verbose:
                 print('%s player %d heading to flag area: %s' % (self.team, self.player_idx, action))
             return action
@@ -247,7 +335,7 @@ class GreedyGoalAgentPlayer(AgentPlayer):
             agent_info = self.the_map.agent_info['red']
             for idx, info in agent_info.items():
                 if info['has_flag']:
-                    action = self.__get_direction_to_xy(info['xy'])
+                    action = self.get_direction_to_xy(info['xy'])
                     if self.config.verbose:
                         print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, action))
             return action
@@ -255,74 +343,49 @@ class GreedyGoalAgentPlayer(AgentPlayer):
             agent_info = self.the_map.agent_info['blue']
             for idx, info in agent_info.items():
                 if info['has_flag']:
-                    action = self.__get_direction_to_xy(info['xy'])
+                    action = self.get_direction_to_xy(info['xy'])
                     if self.config.verbose:
                         print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, action))
             return action
 
-        # head to flag
-        if self.team == 'blue' and not self.the_map.red_flag_in_play:
-            action = self.__get_direction_to_xy(self.the_map.red_flag_xy)
+        # head to flag, if flag is in play it still may appear back there when a player is tagged
+        if self.team == 'blue':# and not self.the_map.red_flag_in_play:
+            action = self.get_direction_to_xy(self.the_map.red_flag_xy)
             if self.config.verbose:
                 print('%s player %d heading to flag: %s' % (self.team, self.player_idx, action))
-        elif self.team == 'red' and not self.the_map.blue_flag_in_play:
-            action = self.__get_direction_to_xy(self.the_map.blue_flag_xy)
+        elif self.team == 'red':# and not self.the_map.blue_flag_in_play:
+            action = self.get_direction_to_xy(self.the_map.blue_flag_xy)
             if self.config.verbose:
                 print('%s player %d heading to flag: %s' % (self.team, self.player_idx, action))
 
         return action
 
-    def __get_direction_to_xy(self, xy):
-        x, y = xy
-        delta_x, delta_y = x - self.x, y - self.y
-        if abs(delta_x) > abs(delta_y):
-            return 'a' if delta_x < 0 else 'd'
-        else:
-            return 'w' if delta_y < 0 else 's'
 
 
-class PriorityQueue:
-    """
-      Citation: Berkeley AI course, Homework 1 from this class
+    
+    
 
-      Implements a priority queue data structure. Each inserted item
-      has a priority associated with it and the client is usually interested
-      in quick retrieval of the lowest-priority item in the queue. This
-      data structure allows O(1) access to the lowest-priority item.
-    """
+    
 
-    def __init__(self):
-        self.heap = []
-        self.count = 0
+    
+    
+    
+    
+    
+class AStarAgentPlayer(AgentPlayer):
+    '''
+    A model-based reflex agent that navigates intelligently using the A* algorithm.
+    '''
+    def __init__(self, x, y, idx, team, the_map, config):
+        super().__init__(x, y, idx, team, the_map, config)
 
-    def push(self, item, priority):
-        entry = (priority, self.count, item)
-        heapq.heappush(self.heap, entry)
-        self.count += 1
-
-    def pop(self):
-        (_, _, item) = heapq.heappop(self.heap)
-        return item
-
-    def isEmpty(self):
-        return len(self.heap) == 0
-
-    def update(self, item, priority):
-        # If item already in priority queue with higher priority, update its priority and rebuild the heap.
-        # If item already in priority queue with equal or lower priority, do nothing.
-        # If item not in priority queue, do the same thing as self.push.
-        for index, (p, c, i) in enumerate(self.heap):
-            if i == item:
-                if p <= priority:
-                    break
-                del self.heap[index]
-                self.heap.append((priority, c, item))
-                heapq.heapify(self.heap)
-                break
-        else:
-            self.push(item, priority)
+        self.goals = ['opponent_flag', 'team_flag_area', 'opponent_flag_area']  # other...
+        self.current_goal = 'opponent_flag'
+        goal_location = the_map.red_flag_xy if team == 'blue' else the_map.blue_flag_xy
+        self.current_path = self.a_star((x, y), goal_location)
 
 
+            
 class AStarAgentPlayer(GreedyGoalAgentPlayer):
     """
     This Agent follows a learned high-level policy to determine its actions
@@ -466,6 +529,8 @@ class AStarAgentPlayer(GreedyGoalAgentPlayer):
     def cartesian_distance(self, current_state, successorState):
         return (((successorState[0] - current_state[0]) ** 2) + ((successorState[1] - current_state[1]) ** 2)) ** .5
 
+    
+    
 class BreadthFirstAgentPlayer(GreedyGoalAgentPlayer):
     """
     This Agent follows a learned high-level policy to determine its actions
@@ -603,28 +668,7 @@ class BreadthFirstAgentPlayer(GreedyGoalAgentPlayer):
     def cartesian_distance(self, current_state, successorState):
         return (((successorState[0] - current_state[0]) ** 2) + ((successorState[1] - current_state[1]) ** 2)) ** .5
 
-
-class Stack:
-    """
-    Citation: Berkeley AI course, Homework 1 from this class
-    A container with a last-in-first-out (LIFO) queuing policy.
-    """
-
-    def __init__(self):
-        self.list = []
-
-    def push(self, item):
-        "Push 'item' onto the stack"
-        self.list.append(item)
-
-    def pop(self):
-        "Pop the most recently pushed item from the stack"
-        return self.list.pop()
-
-    def isEmpty(self):
-        "Returns true if the stack is empty"
-        return len(self.list) == 0
-
+    
 
 class DepthFirstAgentPlayer(GreedyGoalAgentPlayer):
     """
