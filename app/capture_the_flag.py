@@ -6,19 +6,22 @@ import pygame
 from config import Config
 from map_generator import MapGenerator
 from the_map import TheMap
-from player import HumanPlayer, AgentPlayer, GreedyGoalAgentPlayer, AStarAgentPlayer, DepthFirstAgentPlayer, \
-    BreadthFirstAgentPlayer
+from player import *
 
 # helpful pygame wrapper
 import pygame_utils as pyg
 
 
 class CaptureTheFlag():
-    def __init__(self, config, new_map_seed=0):
+    def __init__(self, config, blue_agent_type, blue_nav_type, red_agent_type, red_nav_type, new_map_seed=0):
         '''
         Load background, icon, music, sounds, create flag sprites and areas, create players
         '''
         self.config = config
+        self.blue_agent_type = blue_agent_type
+        self.blue_nav_type = blue_nav_type
+        self.red_agent_type = red_agent_type
+        self.red_nav_type = red_nav_type
 
         # sounds
         self.grabbed_flag_sound = pyg.makeSound(self.config.grabbed_flag_sound)
@@ -87,6 +90,7 @@ class CaptureTheFlag():
         # all players
         self.players = self.blue_players + self.red_players
 
+        
     def run(self):
         nextFrame = pyg.clock()
         frame = 0
@@ -153,6 +157,7 @@ class CaptureTheFlag():
 
         pyg.endWait()
 
+        
     def __get_state(self):
         '''Game logic here.'''
         state = {'blue_wins': False, 'red_wins': False}
@@ -216,6 +221,7 @@ class CaptureTheFlag():
 
         return state
 
+    
     # state actions
 
     def __handle_flag_grabbed(self, player, flag_sprite):
@@ -232,6 +238,7 @@ class CaptureTheFlag():
             self.the_map.blue_flag_in_play = True
             self.the_map.agent_info['red'][player.player_idx]['has_flag'] = True
 
+            
     def __handle_tag(self, player):
         if player.has_flag:
             pyg.playSound(self.tagged_flag_carrier_sound)
@@ -264,6 +271,7 @@ class CaptureTheFlag():
         player.update_sprite(player.incapacitated_sprite)
         player.incapacitated_countdown = 60
 
+        
     def __tagged_by_team_member(self, player):
         if player.team == 'blue':
             for blue_player in self.blue_players:
@@ -277,6 +285,7 @@ class CaptureTheFlag():
 
         return False
 
+    
     def __handle_revival(self, player):
         pyg.playSound(self.revived_sound)
         player.is_incapacitated = False
@@ -290,6 +299,7 @@ class CaptureTheFlag():
         else:
             self.the_map.agent_info['red'][player.player_idx]['is_incapacitated'] = False
 
+            
     def __setup(self, map_path):
         pyg.screenSize(self.config.screen_width, self.config.screen_height)
         pyg.setIcon(self.config.game_icon_image_path)
@@ -305,6 +315,7 @@ class CaptureTheFlag():
         pyg.makeMusic(self.config.default_game_music)
         pyg.playMusic(loops=-1)
 
+        
     def __draw_divide(self):
         pyg.drawLine(self.screen_divide_x - 3, self.config.map_border_size,
                      self.screen_divide_x - 3, self.config.screen_height - self.config.map_border_size,
@@ -314,6 +325,7 @@ class CaptureTheFlag():
                      self.screen_divide_x, self.config.screen_height - self.config.map_border_size,
                      'red', linewidth=3)
 
+        
     def __make_flags(self):
         self.blue_flag_x, self.blue_flag_y = self.__get_flag_position(
             self.the_map, 'blue')
@@ -332,6 +344,7 @@ class CaptureTheFlag():
 
         return blue_flag_sprite, red_flag_sprite
 
+    
     def __get_flag_position(self, the_map, team):
         # choose an available row along a column a set distance from the border
         pad = 20
@@ -352,6 +365,7 @@ class CaptureTheFlag():
 
         return x, y
 
+    
     def __draw_flag_areas(self):
         pyg.drawEllipse(self.blue_flag_x, self.blue_flag_y, self.config.flag_area_size, self.config.flag_area_size,
                         colour='blue', linewidth=3)
@@ -359,6 +373,7 @@ class CaptureTheFlag():
         pyg.drawEllipse(self.red_flag_x, self.red_flag_y, self.config.flag_area_size, self.config.flag_area_size,
                         colour='red', linewidth=3)
 
+        
     def __get_allowed_sprite_init_tiles(self, team):
         side = self.the_map.tile_speeds.shape[1] // 3
         if team == 'blue':
@@ -373,6 +388,7 @@ class CaptureTheFlag():
 
         return allowed_init_tiles
 
+    
     def __make_player(self, allowed_sprite_init_tiles, idx=-1, team='', agent=True):
         player_r_idx, player_c_idx = allowed_sprite_init_tiles.pop()
 
@@ -380,23 +396,60 @@ class CaptureTheFlag():
         player_y_pos = (player_r_idx * self.config.terrain_tile_size) + self.config.terrain_tile_size // 2
 
         if self.config.verbose:
-            print('%s %s on r=%s, c=%d, x=%d, y=%d' % (team, 'agent' if agent else 'player',
-                                                       player_r_idx, player_c_idx, player_x_pos, player_y_pos))
+            if not agent:
+                print('%s-%d player on r=%s, c=%d, x=%d, y=%d' % (team, idx, player_r_idx, player_c_idx, player_x_pos, player_y_pos))
+            else:
+                print('%s-%d %s (%s, using %s) on r=%s, c=%d, x=%d, y=%d' % (team, idx, 'agent' if agent else 'player',
+                    self.agent_type, self.blue_nav_type if team=='blue' else self.red_nav_type,
+                    player_r_idx, player_c_idx, player_x_pos, player_y_pos))
 
         if not agent:  # this will be a different sprite
             player = HumanPlayer(player_x_pos, player_y_pos, idx, team, self.the_map, self.config)
         else:
-            # player = AgentPlayer(player_x_pos, player_y_pos, idx, team, self.the_map, self.config)
-            # player = GreedyGoalAgentPlayer(player_x_pos, player_y_pos, idx, team, self.the_map, self.config)
-            # player = AStarAgentPlayer(player_x_pos, player_y_pos, idx, team, self.the_map, self.config)
-            # player = BreadthFirstAgentPlayer(player_x_pos, player_y_pos, idx, team, self.the_map, self.config)
-            player = DepthFirstAgentPlayer(player_x_pos, player_y_pos, idx, team, self.the_map, self.config)
+            #select nav type
+            if team=='blue':
+                nav_type = self.blue_nav_type
+            else:
+                nav_type = self.red_nav_type
+                
+            #instantiate agent type
+            if self.agent_type=='random':
+                player = AgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
+            elif self.agent_type=='reflex':
+                player = ReflexAgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
+            elif self.agent_type=='high_level_planning':
+                player = HighLevelPlanningAgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
+            elif self.agent_type=='reinforcement_learning':
+                player = ReinforcementLearningAgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
 
         return player
 
+    
 
 if __name__ == '__main__':
     print('Movement Keys: W=north, S=south, A=west, D=east')
+    blue_agent_type = 'reflex'
+    blue_nav_type = 'direct'
+    red_agent_type = 'reflex'
+    red_nav_type = 'direct'
+                
+    if len(sys.argv)>1:
+        agent_types = ["random", "reflex", "high_level_planning", "reinforcement_learning"]
+        navigation_types = ["direct", "bfs", "dfs", "astar"]
+        items = sys.argv[1:]
+        if not len(items)==6:
+            print('Expect arguments: ')
+            print('--blue_agent [one of "random", "reflex", "high_level_planning", "reinforcement_learning"] [one of "direct", "bfs", "dfs", "astar"]')
+            print('--red_agent [one of "random", "reflex", "high_level_planning", "reinforcement_learning"] [one of "direct", "bfs", "dfs", "astar"]')
+            print('Using default agent "reflex" and default navigation "direct"')
+            
+        if items[0]=='--blue_agent' and items[3]=='--red_agent':
+            if items[1] in agent_types and items[2] in navigation_types and items[4] in agent_types and items[5] in navigation_types:
+                blue_agent_type = items[1]
+                blue_nav_type = items[2]
+                red_agent_type = items[4]
+                red_nav_type = items[5]
+                
     config = Config(verbose=False)
-    game = CaptureTheFlag(config, new_map_seed=0)
+    game = CaptureTheFlag(config, blue_agent_type, blue_nav_type, red_agent_type, red_nav_type, new_map_seed=0)
     game.run()

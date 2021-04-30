@@ -9,15 +9,24 @@ class Player():
     '''
     Base player functionality and helper methods
     '''
-    def __init__(self, x, y, idx, team, the_map, config):
+    def __init__(self, x, y, idx, team, nav_type, the_map, config):
         '''
         x,y - the player/agent sprite starting location on the map
+        idx - the player index (unique per team)
         team - blue or red
+        nav_type - navigation algorithm: ['direct', 'bfs', 'dfs', 'astar']
         the_map - a reference to the global map with speeds, flag locations, player locations
         config - configurable settings
         '''
         self.config = config
-
+        self.nav_type = nav_type
+        self.navigation = Navigation(the_map)
+        self.goals = ['opponent_flag', 'team_flag_area', 'opponent_flag_area']
+        self.current_goal = 'opponent_flag'
+        # list of actions for current goal
+        self.goal_actions = []
+        
+        
         # needed for preventing sprite from overlapping a 0 speed location
         self.half_size = config.terrain_tile_size // 2
 
@@ -45,7 +54,7 @@ class Player():
         self.tile_col, self.tile_row = self.the_map.xy_to_cr(x, y)
         self.blocked_countdown = 0
         
-        self.navigation = Navigation(self.the_map)
+        
 
         
     def update(self, frame):
@@ -126,7 +135,8 @@ class Player():
             
 
     def get_action(self):
-        pass
+        if self.actions:
+            return self.actions.pop()
 
     
     def update_sprite(self, sprite):
@@ -137,21 +147,40 @@ class Player():
         
         
     def get_direction_to_xy(self, xy):
+        if self.nav_type=='astar':
+            path = self.navigation.a_star((self.x, self.y), xy)
+            return path
+        elif self.nav_type=='bfs':
+            path = self.navigation.breadth_first((self.x, self.y), xy)
+            return path
+        elif self.nav_type=='dfs':
+            path = self.navigation.breadth_first((self.x, self.y), xy)
+            return path
+        else:
+            x,y = xy
+            delta_x, delta_y = x - self.x, y - self.y
+            if abs(delta_x)>abs(delta_y):
+                return ['a'] if delta_x<0 else ['d']
+            else:
+                return ['w'] if delta_y<0 else ['s']
+            
+            
+    def get_manhattan_direction_to_xy(self, xy):
         x,y = xy
         delta_x, delta_y = x - self.x, y - self.y
         if abs(delta_x)>abs(delta_y):
-            return 'a' if delta_x<0 else 'd'
+            return ['a'] if delta_x<0 else ['d']
         else:
-            return 'w' if delta_y<0 else 's'
+            return ['w'] if delta_y<0 else ['s']
         
         
-    def get_direction_away_from(self, xy):
+    def get_manhattan_direction_away_from(self, xy):
         x,y = xy
         delta_x, delta_y = self.x - x, self.y - y
         if abs(delta_x)<abs(delta_y):
-            return 'a' if delta_x<0 else 'd'
+            return ['a'] if delta_x<0 else ['d']
         else:
-            return 'w' if delta_y<0 else 's'
+            return ['w'] if delta_y<0 else ['s']
         
         
     def go_between(self, xy1, xy2):
@@ -217,8 +246,8 @@ class HumanPlayer(Player):
     '''
     Simple wrapper around keyboard controls
     '''
-    def __init__(self, x, y, idx, team, the_map, config):
-        super().__init__(x, y, idx, team, the_map, config)
+    def __init__(self, x, y, idx, team, nav_type, the_map, config):
+        super().__init__(x, y, idx, team, nav_type, the_map, config)
         # load sprites
         # there are flag holding, nonflag holding, and incapacitated sprites for blue player (human), blue agent, red agent
         # current sprite may change to flag holding or incapacitated sprite
@@ -257,8 +286,8 @@ class AgentPlayer(Player):
     '''
     Agent base - moves around randomly
     '''
-    def __init__(self, x, y, idx, team, the_map, config):
-        super().__init__(x, y, idx, team, the_map, config)
+    def __init__(self, x, y, idx, team, nav_type, the_map, config):
+        super().__init__(x, y, idx, team, nav_type, the_map, config)
         self.prev_dir = 'a' if team == 'red' else 'd'
 
         # load sprites
@@ -287,7 +316,7 @@ class AgentPlayer(Player):
 
 
     
-class GreedyGoalAgentPlayer(AgentPlayer):
+class ReflexAgentPlayer(AgentPlayer):
     '''
     Intelligent model-based reflex agent following these rules:
     
@@ -295,13 +324,12 @@ class GreedyGoalAgentPlayer(AgentPlayer):
     If player has the flag head directly for flag area
     If opponent has flag head directly toward them
     '''
-    def __init__(self, x, y, idx, team, the_map, config):
-        super().__init__(x, y, idx, team, the_map, config)
+    def __init__(self, x, y, idx, team, nav_type, the_map, config):
+        super().__init__(x, y, idx, team, nav_type, the_map, config)
 
         
     def get_action(self):
-        action = ''
-
+        '''Get action based on current state and current goal, change goal if state changed'''
         # if blocked going direct way, try going a random direction for a while
         if self.blocked_countdown:
             if self.blocked_countdown == 20:
@@ -314,495 +342,120 @@ class GreedyGoalAgentPlayer(AgentPlayer):
             if random.randint(1, 10) == 1:
                 self.prev_dir = random.choice(['a', 'w', 's', 'd'])
 
-            action = self.prev_dir
+            self.goal_actions = [self.prev_dir]
             if self.config.verbose:
-                print('%s player %d is blocked, trying different way: %s' % (self.team, self.player_idx, action))
+                print('%s player %d is blocked, trying different way: %s' % (self.team, self.player_idx, self.goal_actions))
 
-            return action
+            return self.goal_actions.pop()
+        
 
-        # head to flag home area
+        # head to flag home area if has flag and not already heading there
         if self.has_flag:
-            if self.team == 'blue':
-                action = self.get_direction_to_xy(self.the_map.blue_flag_xy)
-            else:
-                action = self.get_direction_to_xy(self.the_map.red_flag_xy)
-            if self.config.verbose:
-                print('%s player %d heading to flag area: %s' % (self.team, self.player_idx, action))
-            return action
-
-        # the flag is being run by an opponent, try to tag them
-        if self.the_map.blue_flag_in_play and self.team == 'blue':
-            agent_info = self.the_map.agent_info['red']
-            for idx, info in agent_info.items():
-                if info['has_flag']:
-                    action = self.get_direction_to_xy(info['xy'])
-                    if self.config.verbose:
-                        print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, action))
-            return action
-        if self.the_map.red_flag_in_play and self.team == 'red':
-            agent_info = self.the_map.agent_info['blue']
-            for idx, info in agent_info.items():
-                if info['has_flag']:
-                    action = self.get_direction_to_xy(info['xy'])
-                    if self.config.verbose:
-                        print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, action))
-            return action
-
-        # head to flag, if flag is in play it still may appear back there when a player is tagged
-        if self.team == 'blue':# and not self.the_map.red_flag_in_play:
-            action = self.get_direction_to_xy(self.the_map.red_flag_xy)
-            if self.config.verbose:
-                print('%s player %d heading to flag: %s' % (self.team, self.player_idx, action))
-        elif self.team == 'red':# and not self.the_map.blue_flag_in_play:
-            action = self.get_direction_to_xy(self.the_map.blue_flag_xy)
-            if self.config.verbose:
-                print('%s player %d heading to flag: %s' % (self.team, self.player_idx, action))
-
-        return action
-
-
-
-    
-    
-
-    
-
-    
-    
-    
-    
-    
-class AStarAgentPlayer(AgentPlayer):
-    '''
-    A model-based reflex agent that navigates intelligently using the A* algorithm.
-    '''
-    def __init__(self, x, y, idx, team, the_map, config):
-        super().__init__(x, y, idx, team, the_map, config)
-
-        self.goals = ['opponent_flag', 'team_flag_area', 'opponent_flag_area']  # other...
-        self.current_goal = 'opponent_flag'
-        goal_location = the_map.red_flag_xy if team == 'blue' else the_map.blue_flag_xy
-        self.current_path = self.a_star((x, y), goal_location)
-
-
             
-class AStarAgentPlayer(GreedyGoalAgentPlayer):
-    """
-    This Agent follows a learned high-level policy to determine its actions
-    """
+            #recalc directions if out of directions OR if this is a new state and therefore new goal
+            if not self.goal_actions or not self.current_goal=='team_flag_area':
+                self.current_goal='team_flag_area'
 
-    def __init__(self, x, y, idx, team, the_map, config):
-        super().__init__(x, y, idx, team, the_map, config)
-
-        self.goals = ['opponent_flag', 'team_flag_area', 'opponent_flag_area']  # other...
-        self.current_goal = 'opponent_flag'
-        goal_location = the_map.red_flag_xy if team == 'blue' else the_map.blue_flag_xy
-        self.current_path = self.__a_star((x, y), goal_location)
-
-    def get_action(self):
-        action = ''
-
-        if self.is_incapacitated:
-            return ''
-
-        # if blocked going direct way, try going a random direction for a while
-        if self.blocked_countdown:
-            if self.blocked_countdown == 20:
-                dirs = ['a', 'w', 's', 'd']
-                dirs.remove(self.prev_dir)
-                self.prev_dir = random.choice(dirs)
-
-            self.blocked_countdown -= 1
-
-            if random.randint(1, 10) == 1:
-                self.prev_dir = random.choice(['a', 'w', 's', 'd'])
-
-            action = self.prev_dir
-            if self.config.verbose:
-                print('%s player %d is blocked, trying different way: %s' % (self.team, self.player_idx, action))
-
-            return action
-
-        # recalc A* due to goal change
-        if self.has_flag:
-            if not self.current_goal == 'team_flag_area':
-                self.current_goal = 'team_flag_area'
-                goal_location = self.the_map.blue_flag_xy if self.team == 'blue' else self.the_map.red_flag_xy
-                self.current_path = self.__a_star((self.x, self.y), goal_location)
-            if self.config.verbose:
-                print('%s player %d heading to flag area: %s' % (self.team, self.player_idx, action))
-        else:
-            # the flag is being run by an opponent, try to tag them
-            if self.the_map.blue_flag_in_play and self.team == 'blue':
-                agent_info = self.the_map.agent_info['red']
-                for idx, info in agent_info.items():
-                    if info['has_flag']:
-                        action = self.__get_direction_to_xy(info['xy'])
-                        if self.config.verbose:
-                            print('%s player %d heading to tag opponent %d: %s' % (
-                                self.team, self.player_idx, idx, action))
-                return action
-            if self.the_map.red_flag_in_play and self.team == 'red':
-                agent_info = self.the_map.agent_info['blue']
-                for idx, info in agent_info.items():
-                    if info['has_flag']:
-                        action = self.__get_direction_to_xy(info['xy'])
-                        if self.config.verbose:
-                            print('%s player %d heading to tag opponent %d: %s' % (
-                                self.team, self.player_idx, idx, action))
-                return action
-
-        if self.current_path:
-            action = self.current_path.pop()
-        else:
-            # default action - head directly toward opponent flag area
-            if self.has_flag:
-                goal_location = self.the_map.red_flag_xy if self.team == 'red' else self.the_map.blue_flag_xy
-            else:
-                goal_location = self.the_map.red_flag_xy if self.team == 'blue' else self.the_map.blue_flag_xy
-            action = self.__get_direction_to_xy(goal_location)
-
-        return action
-
-    def __get_direction_to_xy(self, xy):
-        x, y = xy
-        delta_x, delta_y = x - self.x, y - self.y
-        if abs(delta_x) > abs(delta_y):
-            return 'a' if delta_x < 0 else 'd'
-        else:
-            return 'w' if delta_y < 0 else 's'
-
-    def get_action_path(self, goal, successor_to_parent_map):
-        path = [goal[1]]
-        parent = successor_to_parent_map[goal]
-        while parent is not None:
-            if parent[1] is not None:
-                path.insert(0, parent[1])
-            parent = successor_to_parent_map[parent]
-        return path
-
-    def __a_star(self, xy1, xy2):
-        """Search the node that has the lowest combined cost and heuristic first."""
-        xy1 = self.the_map.xy_to_cr(xy1[0], xy1[1])
-        xy2 = self.the_map.xy_to_cr(xy2[0], xy2[1])
-        successor_to_parent_map = {}
-        start_state = xy1
-        successor_to_parent_map[(start_state, None)] = None  # (Successor, Action) -> (Parent, Action)
-        open = PriorityQueue()
-        open.update((start_state, None), 0)
-        closed = []
-        while not open.isEmpty():
-            current_state, action_to_current_state = open.pop()
-            if current_state == xy2:
-                return self.get_action_path((current_state, action_to_current_state), successor_to_parent_map)
-            if current_state not in closed:
-                if current_state == start_state:
-                    current_cost = 0
+                if self.team == 'blue':
+                    self.goal_actions = self.get_direction_to_xy(self.the_map.blue_flag_xy)
                 else:
-                    current_cost = len(self.get_action_path((current_state, action_to_current_state),
-                                                            successor_to_parent_map))
-                for successor_state, action, step_cost in self.get_successors(current_state):
-                    cost = current_cost + step_cost + self.cartesian_distance(current_state, successor_state)
-                    open.update((successor_state, action), cost)
-                    if successor_state not in closed:
-                        successor_to_parent_map[(successor_state, action)] = (current_state, action_to_current_state)
-            closed.append(current_state)
-        return []
+                    self.goal_actions = self.get_direction_to_xy(self.the_map.red_flag_xy)
 
-    def get_successors(self, current_state):
-        successors = []
-        step_cost = 1
-        # State to the north
-        if current_state[0] > 0:
-            successors.append(((current_state[0] - 1, current_state[1]), "w", step_cost))
-        # State to the south
-        if current_state[0] < self.the_map.tile_speeds.shape[0]:
-            successors.append(((current_state[0] + 1, current_state[1]), "s", step_cost))
-        # State to the east
-        if current_state[1] < self.the_map.tile_speeds.shape[1]:
-            successors.append(((current_state[0], current_state[1] + 1), "d", step_cost))
-        # State to the west
-        if current_state[1] > 0:
-            successors.append(((current_state[0], current_state[1] - 1), "a", step_cost))
-        return successors
+                if self.config.verbose:
+                    print('%s player %d heading to flag area: %s' % (self.team, self.player_idx, self.goal_actions))
+                    
+        #flag has priority
+        else:
+            # the flag is being run by a red opponent, try to tag them
+            if self.team == 'blue' and self.the_map.blue_flag_in_play:
+                
+                #recalc directions if out of directions OR if this is a new state and therefore new goal
+                if not self.goal_actions or not self.current_goal=='chase_opponent':
+                    self.current_goal='chase_opponent'
 
-    def cartesian_distance(self, current_state, successorState):
-        return (((successorState[0] - current_state[0]) ** 2) + ((successorState[1] - current_state[1]) ** 2)) ** .5
+                    agent_info = self.the_map.agent_info['red']
+                    for idx, info in agent_info.items():
+                        if info['has_flag']:
+                            #we specifically want manhattan directions because the opponent's position is changing
+                            self.goal_actions = self.get_manhattan_direction_to_xy(info['xy'])
 
-    
-    
-class BreadthFirstAgentPlayer(GreedyGoalAgentPlayer):
-    """
-    This Agent follows a learned high-level policy to determine its actions
-    """
+                            if self.config.verbose:
+                                print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, self.goal_actions))
 
-    def __init__(self, x, y, idx, team, the_map, config):
-        super().__init__(x, y, idx, team, the_map, config)
 
-        self.goals = ['opponent_flag', 'team_flag_area', 'opponent_flag_area']  # other...
-        self.current_goal = 'opponent_flag'
-        goal_location = the_map.red_flag_xy if team == 'blue' else the_map.blue_flag_xy
-        self.current_path = self.breath_first((x, y), goal_location)
+            # the flag is being run by a blue opponent, try to tag them
+            if self.team == 'red' and self.the_map.red_flag_in_play:
+                if not self.goal_actions or not self.current_goal=='chase_opponent':
+                    self.current_goal='chase_opponent'
 
-    def get_action(self):
-        action = ''
+                    agent_info = self.the_map.agent_info['blue']
+                    for idx, info in agent_info.items():
+                        if info['has_flag']:
+                            #we specifically want manhattan directions because the opponent's position is changing
+                            self.goal_actions = self.get_manhattan_direction_to_xy(info['xy'])
 
-        if self.is_incapacitated:
-            return ''
+                            if self.config.verbose:
+                                print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, self.goal_actions))
 
-        # if blocked going direct way, try going a random direction for a while
-        if self.blocked_countdown:
-            if self.blocked_countdown == 20:
-                dirs = ['a', 'w', 's', 'd']
-                dirs.remove(self.prev_dir)
-                self.prev_dir = random.choice(dirs)
 
-            self.blocked_countdown -= 1
+            # head to red flag, if flag is in play it still may appear back there when a player is tagged
+            if self.team == 'blue' and not self.the_map.red_flag_in_play:
+                if not self.goal_actions or not self.current_goal=='opponent_flag':
+                    self.current_goal='opponent_flag'
 
-            if random.randint(1, 10) == 1:
-                self.prev_dir = random.choice(['a', 'w', 's', 'd'])
+                    self.goal_actions = self.get_direction_to_xy(self.the_map.red_flag_xy)
 
+                    if self.config.verbose:
+                        print('%s player %d heading to flag: %s' % (self.team, self.player_idx, self.goal_actions))
+
+            # head to blue flag
+            elif self.team == 'red' and not self.the_map.blue_flag_in_play:
+                if not self.goal_actions or not self.current_goal=='opponent_flag':
+                    self.current_goal='opponent_flag'
+
+                    self.goal_actions = self.get_direction_to_xy(self.the_map.blue_flag_xy)
+
+                    if self.config.verbose:
+                        print('%s player %d heading to flag: %s' % (self.team, self.player_idx, self.goal_actions))
+
+                
+        if self.goal_actions:
+            action = self.goal_actions.pop()
+        else:
+            print('No directions to return! returning previous direction')
             action = self.prev_dir
-            if self.config.verbose:
-                print('%s player %d is blocked, trying different way: %s' % (self.team, self.player_idx, action))
-
-            return action
-
-        # recalc A* due to goal change
-        if self.has_flag:
-            if not self.current_goal == 'team_flag_area':
-                self.current_goal = 'team_flag_area'
-                goal_location = self.the_map.blue_flag_xy if self.team == 'blue' else self.the_map.red_flag_xy
-                self.current_path = self.breath_first((self.x, self.y), goal_location)
-            if self.config.verbose:
-                print('%s player %d heading to flag area: %s' % (self.team, self.player_idx, action))
-        else:
-            # the flag is being run by an opponent, try to tag them
-            if self.the_map.blue_flag_in_play and self.team == 'blue':
-                agent_info = self.the_map.agent_info['red']
-                for idx, info in agent_info.items():
-                    if info['has_flag']:
-                        action = self.__get_direction_to_xy(info['xy'])
-                        if self.config.verbose:
-                            print('%s player %d heading to tag opponent %d: %s' % (
-                                self.team, self.player_idx, idx, action))
-                return action
-            if self.the_map.red_flag_in_play and self.team == 'red':
-                agent_info = self.the_map.agent_info['blue']
-                for idx, info in agent_info.items():
-                    if info['has_flag']:
-                        action = self.__get_direction_to_xy(info['xy'])
-                        if self.config.verbose:
-                            print('%s player %d heading to tag opponent %d: %s' % (
-                                self.team, self.player_idx, idx, action))
-                return action
-
-        if self.current_path:
-            action = self.current_path.pop()
-        else:
-            # default action - head directly toward opponent flag area
-            if self.has_flag:
-                goal_location = self.the_map.red_flag_xy if self.team == 'red' else self.the_map.blue_flag_xy
-            else:
-                goal_location = self.the_map.red_flag_xy if self.team == 'blue' else self.the_map.blue_flag_xy
-            action = self.__get_direction_to_xy(goal_location)
-
+            
         return action
 
-    def __get_direction_to_xy(self, xy):
-        x, y = xy
-        delta_x, delta_y = x - self.x, y - self.y
-        if abs(delta_x) > abs(delta_y):
-            return 'a' if delta_x < 0 else 'd'
-        else:
-            return 'w' if delta_y < 0 else 's'
-
-    def get_action_path(self, goal, successor_to_parent_map):
-        path = [goal[1]]
-        parent = successor_to_parent_map[goal]
-        while parent is not None:
-            if parent[1] is not None:
-                path.insert(0, parent[1])
-            parent = successor_to_parent_map[parent]
-        return path
-
-    def breath_first(self, xy1, xy2):
-        """Search the node that has the lowest combined cost and heuristic first."""
-        xy1 = self.the_map.xy_to_cr(xy1[0], xy1[1])
-        xy2 = self.the_map.xy_to_cr(xy2[0], xy2[1])
-        successor_to_parent_map = {}
-        start_state = xy1
-        successor_to_parent_map[(start_state, None)] = None  # (Successor, Action) -> (Parent, Action)
-        open = PriorityQueue()
-        open.update((start_state, None), 0)
-        closed = []
-        while not open.isEmpty():
-            current_state, action_to_current_state = open.pop()
-            if current_state == xy2:
-                return self.get_action_path((current_state, action_to_current_state), successor_to_parent_map)
-            if current_state not in closed:
-                for successor_state, action, step_cost in self.get_successors(current_state):
-                    open.update((successor_state, action), 0)
-                    if successor_state not in closed:
-                        successor_to_parent_map[(successor_state, action)] = (current_state, action_to_current_state)
-            closed.append(current_state)
-        return []
-
-    def get_successors(self, current_state):
-        successors = []
-        step_cost = 1
-        # State to the north
-        if current_state[0] > 0:
-            successors.append(((current_state[0] - 1, current_state[1]), "w", step_cost))
-        # State to the south
-        if current_state[0] < self.the_map.tile_speeds.shape[0]:
-            successors.append(((current_state[0] + 1, current_state[1]), "s", step_cost))
-        # State to the east
-        if current_state[1] < self.the_map.tile_speeds.shape[1]:
-            successors.append(((current_state[0], current_state[1] + 1), "d", step_cost))
-        # State to the west
-        if current_state[1] > 0:
-            successors.append(((current_state[0], current_state[1] - 1), "a", step_cost))
-        return successors
-
-    def cartesian_distance(self, current_state, successorState):
-        return (((successorState[0] - current_state[0]) ** 2) + ((successorState[1] - current_state[1]) ** 2)) ** .5
-
     
+    
+class HighLevelPlanningAgentPlayer(AgentPlayer):
+    '''
+    Intelligent model-based agent that transforms percepts into high level states
+    and strategically chooses a high level plan in response. 
+    '''
+    def __init__(self, x, y, idx, team, nav_type, the_map, config):
+        super().__init__(x, y, idx, team, nav_type, the_map, config)
 
-class DepthFirstAgentPlayer(GreedyGoalAgentPlayer):
-    """
-    This Agent follows a learned high-level policy to determine its actions
-    """
-
-    def __init__(self, x, y, idx, team, the_map, config):
-        super().__init__(x, y, idx, team, the_map, config)
-
-        self.goals = ['opponent_flag', 'team_flag_area', 'opponent_flag_area']  # other...
-        self.current_goal = 'opponent_flag'
-        goal_location = the_map.red_flag_xy if team == 'blue' else the_map.blue_flag_xy
-        self.current_path = self.depth_first((x, y), goal_location)
-
+        
     def get_action(self):
-        action = ''
+        '''Get action based on current state and current goal, change goal if state changed'''
+        pass
+    
+    
+    
+    
+class ReinforcementLearningAgentPlayer(AgentPlayer):
+    '''
+    Intelligent model-based agent that transforms percepts into high level states
+    and chooses a high level plan in response by utilizing a trained q-value table. 
+    '''
+    def __init__(self, x, y, idx, team, nav_type, the_map, config):
+        super().__init__(x, y, idx, team, nav_type, the_map, config)
 
-        if self.is_incapacitated:
-            return ''
-
-        # if blocked going direct way, try going a random direction for a while
-        if self.blocked_countdown:
-            if self.blocked_countdown == 20:
-                dirs = ['a', 'w', 's', 'd']
-                dirs.remove(self.prev_dir)
-                self.prev_dir = random.choice(dirs)
-
-            self.blocked_countdown -= 1
-
-            if random.randint(1, 10) == 1:
-                self.prev_dir = random.choice(['a', 'w', 's', 'd'])
-
-            action = self.prev_dir
-            if self.config.verbose:
-                print('%s player %d is blocked, trying different way: %s' % (self.team, self.player_idx, action))
-
-            return action
-
-        # recalc A* due to goal change
-        if self.has_flag:
-            if not self.current_goal == 'team_flag_area':
-                self.current_goal = 'team_flag_area'
-                goal_location = self.the_map.blue_flag_xy if self.team == 'blue' else self.the_map.red_flag_xy
-                self.current_path = self.depth_first((self.x, self.y), goal_location)
-            if self.config.verbose:
-                print('%s player %d heading to flag area: %s' % (self.team, self.player_idx, action))
-        else:
-            # the flag is being run by an opponent, try to tag them
-            if self.the_map.blue_flag_in_play and self.team == 'blue':
-                agent_info = self.the_map.agent_info['red']
-                for idx, info in agent_info.items():
-                    if info['has_flag']:
-                        action = self.__get_direction_to_xy(info['xy'])
-                        if self.config.verbose:
-                            print('%s player %d heading to tag opponent %d: %s' % (
-                                self.team, self.player_idx, idx, action))
-                return action
-            if self.the_map.red_flag_in_play and self.team == 'red':
-                agent_info = self.the_map.agent_info['blue']
-                for idx, info in agent_info.items():
-                    if info['has_flag']:
-                        action = self.__get_direction_to_xy(info['xy'])
-                        if self.config.verbose:
-                            print('%s player %d heading to tag opponent %d: %s' % (
-                                self.team, self.player_idx, idx, action))
-                return action
-
-        if self.current_path:
-            action = self.current_path.pop()
-        else:
-            # default action - head directly toward opponent flag area
-            if self.has_flag:
-                goal_location = self.the_map.red_flag_xy if self.team == 'red' else self.the_map.blue_flag_xy
-            else:
-                goal_location = self.the_map.red_flag_xy if self.team == 'blue' else self.the_map.blue_flag_xy
-            action = self.__get_direction_to_xy(goal_location)
-
-        return action
-
-    def __get_direction_to_xy(self, xy):
-        x, y = xy
-        delta_x, delta_y = x - self.x, y - self.y
-        if abs(delta_x) > abs(delta_y):
-            return 'a' if delta_x < 0 else 'd'
-        else:
-            return 'w' if delta_y < 0 else 's'
-
-    def get_action_path(self, goal, successor_to_parent_map):
-        path = [goal[1]]
-        parent = successor_to_parent_map[goal]
-        while parent is not None:
-            if parent[1] is not None:
-                path.insert(0, parent[1])
-            parent = successor_to_parent_map[parent]
-        return path
-
-    def depth_first(self, xy1, xy2):
-        """Search the node that has the lowest combined cost and heuristic first."""
-        xy1 = self.the_map.xy_to_cr(xy1[0], xy1[1])
-        xy2 = self.the_map.xy_to_cr(xy2[0], xy2[1])
-        successor_to_parent_map = {}
-        start_state = xy1
-        successor_to_parent_map[(start_state, None)] = None  # (Successor, Action) -> (Parent, Action)
-        open = Stack()
-        open.push((start_state, None))
-        closed = []
-        while not open.isEmpty():
-            current_state, action_to_current_state = open.pop()
-            if current_state == xy2:
-                return self.get_action_path((current_state, action_to_current_state), successor_to_parent_map)
-            if current_state not in closed:
-                for successor_state, action, step_cost in self.get_successors(current_state):
-                    open.push((successor_state, action))
-                    if successor_state not in closed:
-                        successor_to_parent_map[(successor_state, action)] = (current_state, action_to_current_state)
-            closed.append(current_state)
-        return []
-
-    def get_successors(self, current_state):
-        successors = []
-        step_cost = 1
-        # State to the north
-        if current_state[0] > 0:
-            successors.append(((current_state[0] - 1, current_state[1]), "w", step_cost))
-        # State to the south
-        if current_state[0] < self.the_map.tile_speeds.shape[0]:
-            successors.append(((current_state[0] + 1, current_state[1]), "s", step_cost))
-        # State to the east
-        if current_state[1] < self.the_map.tile_speeds.shape[1]:
-            successors.append(((current_state[0], current_state[1] + 1), "d", step_cost))
-        # State to the west
-        if current_state[1] > 0:
-            successors.append(((current_state[0], current_state[1] - 1), "a", step_cost))
-        return successors
-
-    def cartesian_distance(self, current_state, successorState):
-        return (((successorState[0] - current_state[0]) ** 2) + ((successorState[1] - current_state[1]) ** 2)) ** .5
+        
+    def get_action(self):
+        '''Get action based on current state and current goal, change goal if state changed'''
+        pass
+    
+    
