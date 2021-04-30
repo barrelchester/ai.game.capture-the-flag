@@ -66,7 +66,7 @@ class Navigation():
         while not open_list.isEmpty():
             current_state, action_to_current_state = open_list.pop()
             
-            if current_state == xy2:
+            if current_state == (tile_col2, tile_row2):
                 return self.__get_action_path((current_state, action_to_current_state), successor_to_parent_map)
             
             if current_state not in closed:
@@ -97,7 +97,7 @@ class Navigation():
         while not open_list.isEmpty():
             current_state, action_to_current_state = open_list.pop()
             
-            if current_state == xy2:
+            if current_state == (tile_col2, tile_row2):
                 return self.__get_action_path((current_state, action_to_current_state), successor_to_parent_map)
             
             if current_state not in closed:
@@ -126,47 +126,41 @@ class Navigation():
     def __get_successors(self, current_state):
         successors = []
         step_cost = 1
+        tile_col, tile_row = current_state
         
         # State to the north
-        if current_state[0] > 0:
-            new_x, new_y = current_state[0], current_state[1] - 1
+        if tile_row > 0:
             #in array: row (y) by column (x)
-            step_cost = self.the_map.tile_speeds[new_y, new_x]
+            step_cost = self.the_map.tile_speeds[tile_row - 1, tile_col]
             # a barricade in this direction
             if not step_cost:
                 step_cost = 1e10
                 
-            successors.append(((new_x, new_y), "w", step_cost))
+            successors.append(((tile_col, tile_row - 1), "w", step_cost))
             
         # State to the south
-        if current_state[0] < self.the_map.tile_speeds.shape[0]:
-            new_x, new_y = current_state[0], current_state[1] + 1
-            
-            step_cost = self.the_map.tile_speeds[new_y, new_x]
+        if tile_row < self.the_map.tile_speeds.shape[0]-1:
+            step_cost = self.the_map.tile_speeds[tile_row + 1, tile_col]
             if not step_cost:
                 step_cost = 1e10
                 
-            successors.append(((new_x, new_y), "s", step_cost))
+            successors.append(((tile_col, tile_row + 1), "s", step_cost))
             
         # State to the east
-        if current_state[1] < self.the_map.tile_speeds.shape[1]:
-            new_x, new_y = current_state[0] + 1, current_state[1]
-            
-            step_cost = self.the_map.tile_speeds[new_y, new_x]
+        if tile_col < self.the_map.tile_speeds.shape[1]-1:
+            step_cost = self.the_map.tile_speeds[tile_row, tile_col + 1]
             if not step_cost:
                 step_cost = 1e10
                 
-            successors.append(((new_x, new_y), "d", step_cost))
+            successors.append(((tile_col + 1, tile_row), "d", step_cost))
             
         # State to the west
-        if current_state[1] > 0:
-            new_x, new_y = current_state[0] - 1, current_state[1]
-            
-            step_cost = self.the_map.tile_speeds[new_y, new_x]
+        if tile_col > 0:
+            step_cost = self.the_map.tile_speeds[tile_row, tile_col - 1]
             if not step_cost:
                 step_cost = 1e10
                 
-            successors.append(((new_x, new_y), "a", step_cost))
+            successors.append(((tile_col - 1, tile_row), "a", step_cost))
             
         return successors
     

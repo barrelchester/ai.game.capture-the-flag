@@ -96,7 +96,7 @@ class CaptureTheFlag():
     def run(self):
         nextFrame = pyg.clock()
         frame = 0
-        pyg.pause(5000)
+        pyg.pause(3000)
         
         while True:
             # quit?
@@ -428,12 +428,16 @@ class CaptureTheFlag():
                 
             #instantiate agent type
             if agent_type=='random':
+                print('Creating random agent')
                 player = AgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
             elif agent_type=='reflex':
+                print('Creating reflex agent')
                 player = ReflexAgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
             elif agent_type=='high_level_planning':
+                print('Creating high_level_planning agent')
                 player = HighLevelPlanningAgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
             elif agent_type=='reinforcement_learning':
+                print('Creating reinforcement_learning agent')
                 player = ReinforcementLearningAgentPlayer(player_x_pos, player_y_pos, idx, team, nav_type, self.the_map, self.config)
 
         return player
@@ -442,9 +446,9 @@ class CaptureTheFlag():
 
 if __name__ == '__main__':
     print('Movement Keys: W=north, S=south, A=west, D=east')
-    blue_agent_type = 'reflex'
+    blue_agent_type = 'reinforcement_learning' #'high_level_planning'
     blue_nav_type = 'bfs' #'astar' #'direct'
-    red_agent_type = 'random' #'reflex'
+    red_agent_type =  'random' #'reflex'
     red_nav_type = 'direct'
                 
     if len(sys.argv)>1:

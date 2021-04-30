@@ -1,5 +1,8 @@
 import random
+import numpy as np
+
 import pygame_utils as pyg
+
 from navigation import Navigation
 from high_level_policy import HighLevelPolicy
 
@@ -54,8 +57,6 @@ class Player():
         self.tile_col, self.tile_row = self.the_map.xy_to_cr(x, y)
         self.blocked_countdown = 0
         
-        
-
         
     def update(self, frame):
         # get movement action based on map, players, flag percepts
@@ -157,22 +158,16 @@ class Player():
                 return ['w'] if delta_y<0 else ['s']
             
         if self.nav_type=='astar':
-            #print('calculating a*')
             path = self.navigation.a_star((self.x, self.y), xy)
             path = list(reversed(path))
-            #print('path len', len(path))
             return path
         elif self.nav_type=='bfs':
-            print('calculating bfs')
             path = self.navigation.breadth_first((self.x, self.y), xy)
             path = list(reversed(path))
-            print('path len', len(path))
             return path
         elif self.nav_type=='dfs':
-            print('calculating dfs')
-            path = self.navigation.breadth_first((self.x, self.y), xy)
+            path = self.navigation.depth_first((self.x, self.y), xy)
             path = list(reversed(path))
-            print('path len', len(path))
             return path
         else:
             x,y = xy
@@ -461,6 +456,7 @@ class HighLevelPlanningAgentPlayer(AgentPlayer):
         self.policy = HighLevelPolicy('q.npy')
         self.prev_hls = ()
         self.prev_hla = ''
+        self.prev_action = 's'
         
         
     def get_action(self):
@@ -470,9 +466,12 @@ class HighLevelPlanningAgentPlayer(AgentPlayer):
         #only change HLA if state is different
         if hls==self.prev_hls and self.goal_actions:
             return self.goal_actions.pop()
-
+        
         #choose best HLA
         hla = self.choose_hla(hls)
+        if self.goal_actions:
+            print('STATE CHANGE, old state %s, new state %s, new hla: %s' % (self.prev_hls, hls, hla))
+        self.prev_hls = hls
         
         self.goal_actions = self.hla_to_actions(hla)
         
@@ -480,11 +479,15 @@ class HighLevelPlanningAgentPlayer(AgentPlayer):
             action = self.goal_actions.pop()
         else:
             action = self.prev_action
-            
+        
+        self.prev_action = action
+        
         return action
     
     
     def choose_hla(self, hls):
+        hla = self.prev_hla
+        
         allowed_hlas = self.policy.get_available_hlas(self, self.the_map, hls)   
         
         if sum(hls)==0 or sum(hls)==1 and hls[self.policy.high_level_states.index('self_in_enemy_territory')]:
@@ -505,7 +508,7 @@ class HighLevelPlanningAgentPlayer(AgentPlayer):
         elif not hls[self.policy.high_level_states.index('self_in_enemy_territory')]: 
             hla='go_nearest_opponent'
             
-        if not hla in allowed_hlas:
+        if hla not in allowed_hlas:
             hla = 'go_opponent_flag'
             
         return hla
@@ -513,60 +516,61 @@ class HighLevelPlanningAgentPlayer(AgentPlayer):
         
     def hla_to_actions(self, hla):
         opponent_team = 'red' if self.team=='blue' else 'blue'
+        goal_actions = []
         
         if hla=='random':
             if random.randint(1,20) == 1:
                 self.prev_dir = random.choice(['a','w','s','d'])
-            self.goal_actions = [self.prev_dir]
+            goal_actions = [self.prev_dir]
             
         elif hla=='go_opponent_flag':
             xy = self.the_map.red_flag_xy if self.team=='blue' else self.the_map.blue_flag_xy
-            self.goal_actions = self.get_direction_to_xy(xy)
+            goal_actions = self.get_direction_to_xy(xy)
             
         elif hla=='go_team_flag_area':
             xy = self.the_map.blue_flag_xy if self.team=='blue' else self.the_map.red_flag_xy
-            self.goal_actions = self.get_direction_to_xy(xy)
+            goal_actions = self.get_direction_to_xy(xy)
             
         elif hla=='go_opponent_flag_carrier':
             for info in self.the_map.agent_info[opponent_team].values():
                 if info['has_flag']:
-                    self.goal_actions = [self.get_manhattan_direction_to_xy(info['xy'])]
+                    goal_actions = [self.get_manhattan_direction_to_xy(info['xy'])]
                     
         elif hla=='go_nearest_opponent':
             info = self.get_closest_player_info_by_team(opponent_team)
-            self.goal_actions = [self.get_manhattan_direction_to_xy(info['xy'])]
+            goal_actions = [self.get_manhattan_direction_to_xy(info['xy'])]
             
         elif hla=='go_nearest_teammate':
             info = self.get_closest_player_info_by_team(self.team)
-            self.goal_actions = self.get_direction_to_xy(info['xy'])
+            goal_actions = self.get_direction_to_xy(info['xy'])
             
         elif hla=='go_nearest_incapacitated_teammate':
             info = self.get_closest_incapacitated_player_info_by_team(self.team)
-            self.goal_actions = self.get_direction_to_xy(info['xy'])
+            goal_actions = self.get_direction_to_xy(info['xy'])
             
         elif hla=='gaurd_nearest_teammate':
             info = self.get_closest_player_info_by_team(self.team)
             opp_info = self.get_closest_player_info_to_xy_by_team(info['xy'], opponent_team)
-            self.goal_actions = self.go_between(info['xy'], opp_info['xy'])
+            goal_actions = self.go_between(info['xy'], opp_info['xy'])
             
         elif hla=='gaurd_teammate_flag_carrier':
             for info in self.the_map.agent_info[self.team].values():
                 if info['has_flag']:
-                    self.goal_actions = self.get_direction_to_xy(info['xy'])
+                    goal_actions = self.get_direction_to_xy(info['xy'])
                     
         elif hla=='gaurd_team_flag_area':
             xy1 = self.the_map.blue_flag_xy if self.team=='blue' else self.the_map.red_flag_xy
             info = self.get_closest_player_info_to_xy_by_team(xy1, opponent_team)
-            self.goal_actions = self.go_between(xy1, info['xy'])
+            goal_actions = self.go_between(xy1, info['xy'])
             
         elif hla=='guard_opponent_flag_area':
             xy1 = self.the_map.red_flag_xy if self.team=='blue' else self.the_map.blue_flag_xy
             info = self.get_closest_player_info_to_xy_by_team(xy1, opponent_team)
-            self.goal_actions = self.go_between(xy1, info['xy'])
+            goal_actions = self.go_between(xy1, info['xy'])
             
         elif hla=='run_away_from_nearest_opponent':
             info = self.get_closest_player_info_by_team(opponent_team)
-            self.goal_actions = [self.get_manhattan_direction_away_from(info['xy'])]
+            goal_actions = [self.get_manhattan_direction_away_from(info['xy'])]
             
         elif hla=='run_away_from_opponents_centroid':
             xs, ys = [],[]
@@ -575,7 +579,7 @@ class HighLevelPlanningAgentPlayer(AgentPlayer):
                 xs.append(x)
                 ys.append(y)
             mean_xy = (sum(xs)/len(xs), sum(ys)/len(ys))
-            self.goal_actions = [self.get_manhattan_direction_away_from(mean_xy)]
+            goal_actions = [self.get_manhattan_direction_away_from(mean_xy)]
             
         return goal_actions
     
@@ -598,7 +602,11 @@ class ReinforcementLearningAgentPlayer(HighLevelPlanningAgentPlayer):
         if hls==self.prev_hls and self.goal_actions:
             return self.goal_actions.pop()
         
-        hla = self.policy.get_high_level_action(self, self.the_map, with_probability=False)
+        hla, utility = self.policy.get_high_level_action(self, self.the_map, hls, with_probability=False)
+        
+        if self.goal_actions:
+            print('STATE CHANGE, old state %s, new state %s, new hla: %s, utility: %.4f' % (self.prev_hls, hls, hla, utility))
+        self.prev_hls = hls
     
         self.goal_actions = self.hla_to_actions(hla)
         
@@ -606,6 +614,8 @@ class ReinforcementLearningAgentPlayer(HighLevelPlanningAgentPlayer):
             action = self.goal_actions.pop()
         else:
             action = self.prev_action
+            
+        self.prev_action = action
             
         return action
     
