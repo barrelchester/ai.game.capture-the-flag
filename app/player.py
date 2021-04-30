@@ -22,8 +22,7 @@ class Player():
         self.config = config
         self.nav_type = nav_type
         self.navigation = Navigation(the_map)
-        self.goals = ['opponent_flag', 'team_flag_area', 'opponent_flag_area']
-        self.current_goal = 'opponent_flag'
+        
         # list of actions for current goal
         self.goal_actions = []
         
@@ -75,25 +74,25 @@ class Player():
             pyg.changeSpriteImage(self.sprite, 0 * 8 + frame)
             new_x += self.speed
             # new_x is center of sprite, adding half size in movement direction prevents overlap 0 speed tile
-            delta = (self.half_size, 0)
+            #delta = (self.half_size, 0)
 
         # move down
         elif action == 's':
             pyg.changeSpriteImage(self.sprite, 1 * 8 + frame)
             new_y += self.speed
-            delta = (0, self.half_size)
+            #delta = (0, self.half_size)
 
         # move left
         elif action == 'a':
             pyg.changeSpriteImage(self.sprite, 2 * 8 + frame)
             new_x -= self.speed
-            delta = (-self.half_size, 0)
+            #delta = (-self.half_size, 0)
 
         # move up
         elif action == 'w':
             pyg.changeSpriteImage(self.sprite, 3 * 8 + frame)
             new_y -= self.speed
-            delta = (0, -self.half_size)
+            #delta = (0, -self.half_size)
 
         # stay still
         else:
@@ -148,14 +147,32 @@ class Player():
         
         
     def get_direction_to_xy(self, xy):
+        #if close, use manhattan always
+        if max(abs(xy[0] - self.x), abs(xy[1] - self.y)) <= (self.the_map.tile_size*3):
+            x,y = xy
+            delta_x, delta_y = x - self.x, y - self.y
+            if abs(delta_x)>abs(delta_y):
+                return ['a'] if delta_x<0 else ['d']
+            else:
+                return ['w'] if delta_y<0 else ['s']
+            
         if self.nav_type=='astar':
+            #print('calculating a*')
             path = self.navigation.a_star((self.x, self.y), xy)
+            path = list(reversed(path))
+            #print('path len', len(path))
             return path
         elif self.nav_type=='bfs':
+            print('calculating bfs')
             path = self.navigation.breadth_first((self.x, self.y), xy)
+            path = list(reversed(path))
+            print('path len', len(path))
             return path
         elif self.nav_type=='dfs':
+            print('calculating dfs')
             path = self.navigation.breadth_first((self.x, self.y), xy)
+            path = list(reversed(path))
+            print('path len', len(path))
             return path
         else:
             x,y = xy
@@ -327,7 +344,9 @@ class ReflexAgentPlayer(AgentPlayer):
     '''
     def __init__(self, x, y, idx, team, nav_type, the_map, config):
         super().__init__(x, y, idx, team, nav_type, the_map, config)
-
+        self.goals = ['go_team_flag_area', 'chase_opponent', 'go_opponent_flag']
+        self.current_goal = 'go_opponent_flag'
+        
         
     def get_action(self):
         '''Get action based on current state and current goal, change goal if state changed'''
@@ -353,8 +372,8 @@ class ReflexAgentPlayer(AgentPlayer):
         if self.has_flag:
             
             #recalc directions if out of directions OR if this is a new state and therefore new goal
-            if not self.goal_actions or not self.current_goal=='team_flag_area':
-                self.current_goal='team_flag_area'
+            if not self.goal_actions or not self.current_goal=='go_team_flag_area':
+                self.current_goal='go_team_flag_area'
 
                 if self.team == 'blue':
                     #do I need to reverse these?
@@ -368,62 +387,64 @@ class ReflexAgentPlayer(AgentPlayer):
         #flag has priority
         else:
             # the flag is being run by a red opponent, try to tag them
-            if self.team == 'blue' and self.the_map.blue_flag_in_play:
+            if self.team == 'blue':
+                if self.the_map.blue_flag_in_play:
                 
-                #recalc directions if out of directions OR if this is a new state and therefore new goal
-                if not self.goal_actions or not self.current_goal=='chase_opponent':
-                    self.current_goal='chase_opponent'
+                    #recalc directions if out of directions OR if this is a new state and therefore new goal
+                    if not self.goal_actions or not self.current_goal=='chase_opponent':
+                        self.current_goal='chase_opponent'
 
-                    agent_info = self.the_map.agent_info['red']
-                    for idx, info in agent_info.items():
-                        if info['has_flag']:
-                            #we specifically want manhattan directions because the opponent's position is changing
-                            self.goal_actions = self.get_manhattan_direction_to_xy(info['xy'])
+                        agent_info = self.the_map.agent_info['red']
+                        for idx, info in agent_info.items():
+                            if info['has_flag']:
+                                #we specifically want manhattan directions because the opponent's position is changing
+                                self.goal_actions = self.get_manhattan_direction_to_xy(info['xy'])
 
-                            if self.config.verbose:
-                                print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, self.goal_actions))
+                                if self.config.verbose:
+                                    print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, self.goal_actions))
+                                break
+                #go to opp flag area to wait
+                else:
+                    if not self.goal_actions or not self.current_goal=='go_opponent_flag':
+                        self.current_goal='go_opponent_flag'
 
+                        self.goal_actions = self.get_direction_to_xy(self.the_map.red_flag_xy)
+
+                        if self.config.verbose:
+                            print('%s player %d heading to flag: %s' % (self.team, self.player_idx, self.goal_actions))
 
             # the flag is being run by a blue opponent, try to tag them
-            if self.team == 'red' and self.the_map.red_flag_in_play:
-                if not self.goal_actions or not self.current_goal=='chase_opponent':
-                    self.current_goal='chase_opponent'
+            else:
+                if self.the_map.red_flag_in_play:
+                    if not self.goal_actions or not self.current_goal=='chase_opponent':
+                        self.current_goal='chase_opponent'
 
-                    agent_info = self.the_map.agent_info['blue']
-                    for idx, info in agent_info.items():
-                        if info['has_flag']:
-                            #we specifically want manhattan directions because the opponent's position is changing
-                            self.goal_actions = self.get_manhattan_direction_to_xy(info['xy'])
+                        agent_info = self.the_map.agent_info['blue']
+                        for idx, info in agent_info.items():
+                            if info['has_flag']:
+                                #we specifically want manhattan directions because the opponent's position is changing
+                                self.goal_actions = self.get_manhattan_direction_to_xy(info['xy'])
 
-                            if self.config.verbose:
-                                print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, self.goal_actions))
+                                if self.config.verbose:
+                                    print('%s player %d heading to tag opponent %d: %s' % (self.team, self.player_idx, idx, self.goal_actions))
+                                break
+                else:
+                    if not self.goal_actions or not self.current_goal=='go_opponent_flag':
+                        self.current_goal='go_opponent_flag'
 
+                        self.goal_actions = self.get_direction_to_xy(self.the_map.blue_flag_xy)
 
-            # head to red flag, if flag is in play it still may appear back there when a player is tagged
-            if self.team == 'blue' and not self.the_map.red_flag_in_play:
-                if not self.goal_actions or not self.current_goal=='opponent_flag':
-                    self.current_goal='opponent_flag'
-
-                    self.goal_actions = self.get_direction_to_xy(self.the_map.red_flag_xy)
-
-                    if self.config.verbose:
-                        print('%s player %d heading to flag: %s' % (self.team, self.player_idx, self.goal_actions))
-
-            # head to blue flag
-            elif self.team == 'red' and not self.the_map.blue_flag_in_play:
-                if not self.goal_actions or not self.current_goal=='opponent_flag':
-                    self.current_goal='opponent_flag'
-
-                    self.goal_actions = self.get_direction_to_xy(self.the_map.blue_flag_xy)
-
-                    if self.config.verbose:
-                        print('%s player %d heading to flag: %s' % (self.team, self.player_idx, self.goal_actions))
+                        if self.config.verbose:
+                            print('%s player %d heading to flag: %s' % (self.team, self.player_idx, self.goal_actions))
 
                 
         if self.goal_actions:
             action = self.goal_actions.pop()
         else:
-            print('No directions to return! returning previous direction')
+            tfip = self.the_map.blue_flag_in_play if self.team == 'blue' else self.the_map.red_flag_in_play
+            ofip = self.the_map.blue_flag_in_play if self.team == 'red' else self.the_map.red_flag_in_play
+            print('No directions to return! curgoal: %s, team: %s, incap: %s, hasflag: %s, teamflaginplay: %s, oppflaginplay: %s' % (
+                self.current_goal, self.team, self.is_incapacitated, self.has_flag, tfip, ofip))
             action = self.prev_dir
             
         return action

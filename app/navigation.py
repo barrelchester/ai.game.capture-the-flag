@@ -12,11 +12,13 @@ class Navigation():
         
     def a_star(self, xy1, xy2):
         """Search the node that has the lowest combined cost and heuristic first."""
-        xy1 = self.the_map.xy_to_cr(xy1[0], xy1[1])
-        xy2 = self.the_map.xy_to_cr(xy2[0], xy2[1])
+        tile_col1, tile_row1 = self.the_map.xy_to_cr(xy1[0], xy1[1])
+        tile_col2, tile_row2 = self.the_map.xy_to_cr(xy2[0], xy2[1])
         
         successor_to_parent_map = {}
-        start_state = xy1
+        start_state = (tile_col1, tile_row1)
+        #print('x=%d, y=%d to col=%d, row=%d (map row=%d, col= %d)' % (xy1[0], xy1[1], tile_col1, tile_row1, 
+        #                               self.the_map.tile_speeds.shape[0], self.the_map.tile_speeds.shape[1]))
         successor_to_parent_map[(start_state, None)] = None  # (Successor, Action) -> (Parent, Action)
         
         open_list = PriorityQueue()
@@ -26,7 +28,7 @@ class Navigation():
         while not open_list.isEmpty():
             current_state, action_to_current_state = open_list.pop()
             
-            if current_state == xy2:
+            if current_state == (tile_col2, tile_row2):
                 return self.__get_action_path((current_state, action_to_current_state), successor_to_parent_map)
             
             if current_state not in closed:
@@ -50,11 +52,11 @@ class Navigation():
     
     def breadth_first(self, xy1, xy2):
         """Execute a breadth first search"""
-        xy1 = self.the_map.xy_to_cr(xy1[0], xy1[1])
-        xy2 = self.the_map.xy_to_cr(xy2[0], xy2[1])
+        tile_col1, tile_row1 = self.the_map.xy_to_cr(xy1[0], xy1[1])
+        tile_col2, tile_row2 = self.the_map.xy_to_cr(xy2[0], xy2[1])
         
         successor_to_parent_map = {}
-        start_state = xy1
+        start_state = (tile_col1, tile_row1)
         successor_to_parent_map[(start_state, None)] = None  # (Successor, Action) -> (Parent, Action)
         
         open_list = PriorityQueue()
@@ -81,11 +83,11 @@ class Navigation():
     
     def depth_first(self, xy1, xy2):
         """Execute a depth first search."""
-        xy1 = self.the_map.xy_to_cr(xy1[0], xy1[1])
-        xy2 = self.the_map.xy_to_cr(xy2[0], xy2[1])
+        tile_col1, tile_row1 = self.the_map.xy_to_cr(xy1[0], xy1[1])
+        tile_col2, tile_row2 = self.the_map.xy_to_cr(xy2[0], xy2[1])
         
         successor_to_parent_map = {}
-        start_state = xy1
+        start_state = (tile_col1, tile_row1)
         successor_to_parent_map[(start_state, None)] = None  # (Successor, Action) -> (Parent, Action)
         
         open_list = Stack()
@@ -127,10 +129,9 @@ class Navigation():
         
         # State to the north
         if current_state[0] > 0:
-            new_x, new_y = current_state[0] - 1, current_state[1]
+            new_x, new_y = current_state[0], current_state[1] - 1
             #in array: row (y) by column (x)
             step_cost = self.the_map.tile_speeds[new_y, new_x]
-            
             # a barricade in this direction
             if not step_cost:
                 step_cost = 1e10
@@ -139,7 +140,7 @@ class Navigation():
             
         # State to the south
         if current_state[0] < self.the_map.tile_speeds.shape[0]:
-            new_x, new_y = current_state[0] + 1, current_state[1]
+            new_x, new_y = current_state[0], current_state[1] + 1
             
             step_cost = self.the_map.tile_speeds[new_y, new_x]
             if not step_cost:
@@ -149,7 +150,7 @@ class Navigation():
             
         # State to the east
         if current_state[1] < self.the_map.tile_speeds.shape[1]:
-            new_x, new_y = current_state[0], current_state[1] + 1
+            new_x, new_y = current_state[0] + 1, current_state[1]
             
             step_cost = self.the_map.tile_speeds[new_y, new_x]
             if not step_cost:
@@ -159,7 +160,7 @@ class Navigation():
             
         # State to the west
         if current_state[1] > 0:
-            new_x, new_y = current_state[0], current_state[1] - 1
+            new_x, new_y = current_state[0] - 1, current_state[1]
             
             step_cost = self.the_map.tile_speeds[new_y, new_x]
             if not step_cost:

@@ -96,7 +96,7 @@ class CaptureTheFlag():
     def run(self):
         nextFrame = pyg.clock()
         frame = 0
-        pyg.pause(3000)
+        pyg.pause(5000)
         
         while True:
             # quit?
@@ -174,21 +174,25 @@ class CaptureTheFlag():
 
                 # is countdown over?
                 if player.incapacitated_countdown <= 0:
-                    print('%s player is no longer incapacitated' % player.team)
+                    if self.config.verbose:
+                        print('%s player is no longer incapacitated' % player.team)
                     self.__handle_revival(player)
                 # player revived - TODO use sprite group
                 elif self.__tagged_by_team_member(player):
-                    print('%s player revived' % player.team)
+                    if self.config.verbose:
+                        print('%s player revived' % player.team)
                     self.__handle_revival(player)
                 continue
 
             # check for win condition
             if player.has_flag and player.in_flag_area:
                 if player.team == 'blue':
-                    print('blue wins')
+                    if self.config.verbose:
+                        print('blue wins')
                     state['blue_wins'] = True
                 else:
-                    print('red wins')
+                    if self.config.verbose:
+                        print('red wins')
                     state['red_wins'] = True
                 break
 
@@ -199,12 +203,14 @@ class CaptureTheFlag():
             # flag grabbed?
             if not self.the_map.blue_flag_in_play and player.team == 'red' and pyg.touching(player.sprite,
                                                                                             self.blue_flag_sprite):
-                print('%s player %d touched blue flag' % (player.team, player.player_idx))
+                if self.config.verbose:
+                    print('%s player %d touched blue flag' % (player.team, player.player_idx))
                 self.__handle_flag_grabbed(player, self.blue_flag_sprite)
                 continue
             elif not self.the_map.red_flag_in_play and player.team == 'blue' and pyg.touching(player.sprite,
                                                                                               self.red_flag_sprite):
-                print('%s player %d touched blue flag' % (player.team, player.player_idx))
+                if self.config.verbose:
+                    print('%s player %d touched blue flag' % (player.team, player.player_idx))
                 self.__handle_flag_grabbed(player, self.red_flag_sprite)
                 continue
 
@@ -212,13 +218,15 @@ class CaptureTheFlag():
             if player.in_enemy_territory or player.has_flag:
                 if player.team == 'blue':
                     if any([pyg.touching(player.sprite, red_player.sprite) != None for red_player in self.red_players]):
-                        print('blue player tagged')
+                        if self.config.verbose:
+                            print('blue player tagged')
                         self.__handle_tag(player)
                         continue
                 elif player.team == 'red':
                     if any([pyg.touching(player.sprite, blue_player.sprite) != None for blue_player in
                             self.blue_players]):
-                        print('red player tagged')
+                        if self.config.verbose:
+                            print('red player tagged')
                         self.__handle_tag(player)
                         continue
 
@@ -435,8 +443,8 @@ class CaptureTheFlag():
 if __name__ == '__main__':
     print('Movement Keys: W=north, S=south, A=west, D=east')
     blue_agent_type = 'reflex'
-    blue_nav_type = 'direct'
-    red_agent_type = 'reflex'
+    blue_nav_type = 'bfs' #'astar' #'direct'
+    red_agent_type = 'random' #'reflex'
     red_nav_type = 'direct'
                 
     if len(sys.argv)>1:
