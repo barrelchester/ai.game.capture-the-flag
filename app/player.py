@@ -469,12 +469,13 @@ class HighLevelPlanningAgentPlayer(AgentPlayer):
         
         #choose best HLA
         hla = self.choose_hla(hls)
-        if self.goal_actions:
+        
+        if self.config.verbose and self.goal_actions:
             print('STATE CHANGE, old state %s, new state %s, new hla: %s' % (self.prev_hls, hls, hla))
         self.prev_hls = hls
         
         self.goal_actions = self.hla_to_actions(hla)
-        
+            
         if self.goal_actions:
             action = self.goal_actions.pop()
         else:
@@ -534,11 +535,11 @@ class HighLevelPlanningAgentPlayer(AgentPlayer):
         elif hla=='go_opponent_flag_carrier':
             for info in self.the_map.agent_info[opponent_team].values():
                 if info['has_flag']:
-                    goal_actions = [self.get_manhattan_direction_to_xy(info['xy'])]
+                    goal_actions = self.get_manhattan_direction_to_xy(info['xy'])
                     
         elif hla=='go_nearest_opponent':
             info = self.get_closest_player_info_by_team(opponent_team)
-            goal_actions = [self.get_manhattan_direction_to_xy(info['xy'])]
+            goal_actions = self.get_manhattan_direction_to_xy(info['xy'])
             
         elif hla=='go_nearest_teammate':
             info = self.get_closest_player_info_by_team(self.team)
@@ -570,7 +571,7 @@ class HighLevelPlanningAgentPlayer(AgentPlayer):
             
         elif hla=='run_away_from_nearest_opponent':
             info = self.get_closest_player_info_by_team(opponent_team)
-            goal_actions = [self.get_manhattan_direction_away_from(info['xy'])]
+            goal_actions = self.get_manhattan_direction_away_from(info['xy'])
             
         elif hla=='run_away_from_opponents_centroid':
             xs, ys = [],[]
@@ -579,7 +580,7 @@ class HighLevelPlanningAgentPlayer(AgentPlayer):
                 xs.append(x)
                 ys.append(y)
             mean_xy = (sum(xs)/len(xs), sum(ys)/len(ys))
-            goal_actions = [self.get_manhattan_direction_away_from(mean_xy)]
+            goal_actions = self.get_manhattan_direction_away_from(mean_xy)
             
         return goal_actions
     
@@ -603,13 +604,15 @@ class ReinforcementLearningAgentPlayer(HighLevelPlanningAgentPlayer):
             return self.goal_actions.pop()
         
         hla, utility = self.policy.get_high_level_action(self, self.the_map, hls, with_probability=False)
+        #if self.config.verbose:
+        #print('HLA %s, Utility %.4f' % (hla, utility))
         
-        if self.goal_actions:
+        if self.goal_actions: # and self.config.verbose:
             print('STATE CHANGE, old state %s, new state %s, new hla: %s, utility: %.4f' % (self.prev_hls, hls, hla, utility))
         self.prev_hls = hls
     
         self.goal_actions = self.hla_to_actions(hla)
-        
+            
         if self.goal_actions:
             action = self.goal_actions.pop()
         else:

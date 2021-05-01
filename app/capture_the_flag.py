@@ -446,9 +446,9 @@ class CaptureTheFlag():
 
 if __name__ == '__main__':
     print('Movement Keys: W=north, S=south, A=west, D=east')
-    blue_agent_type = 'reinforcement_learning' #'high_level_planning'
-    blue_nav_type = 'bfs' #'astar' #'direct'
-    red_agent_type =  'random' #'reflex'
+    blue_agent_type = 'high_level_planning' #'reinforcement_learning' #
+    blue_nav_type = 'astar' #'bfs' # #'direct'
+    red_agent_type =  'reflex' #'random' #
     red_nav_type = 'direct'
                 
     if len(sys.argv)>1:

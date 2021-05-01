@@ -48,25 +48,25 @@ class HighLevelPolicy:
             self.q = np.zeros((len(self.high_level_state_codes), len(self.high_level_actions)))
 
         self.prev_hla = 'random'
-        
+        self.prev_utility = -1.0
         
     def get_high_level_action(self, player, the_map, high_level_state, with_probability=False):
         '''Get a high level action for the player based on high level percepts'''
         #this should only be called for live players, not incapacitated players, but we'll check
         if player.is_incapacitated:
-            return 'wait'
+            return 'wait', -1.0
         
         #this could be a never encountered before hls, if so, just return previous hla
         if high_level_state not in self.high_level_state_codes:
             print('New state found: ', high_level_state)
-            return self.prev_hla
+            return self.prev_hla, self.prev_utility
         
         state_idx = self.high_level_state_codes.index(high_level_state)
         
         #select best action with probability proportional to utility
         action_utilities = {}
         best_hla = ''
-        best_utility = 0.0
+        best_utility = -float('inf')
         
         for hla in self.get_available_hlas(player, the_map, high_level_state):
             action_idx = self.high_level_actions.index(hla)
@@ -93,6 +93,7 @@ class HighLevelPolicy:
             hla = best_hla
             
         self.prev_hla = hla
+        self.prev_utility = best_utility
         
         return hla, best_utility
     
