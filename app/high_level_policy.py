@@ -1,4 +1,4 @@
-import os, random
+import os, random, itertools
 import numpy as np
 
 
@@ -37,48 +37,44 @@ class HighLevelPolicy:
               'nearest_opponent_incapacitated'
              ]
         
-        #states seen in 10K games
-        self.state_probs = {}
-        if os.path.exists('state_probs.pkl'):
-            with open('state_probs.pkl', 'rb') as o:
-                self.state_probs = pickle.load(o)
-                
-        #if these are used there's a possibility a new state will appear
-        if self.state_probs:
-            self.high_level_state_codes = [s for s,c in self.state_probs.items() if c>100]
         #every possible state
-        else: 
-            self.high_level_state_codes = [tuple([int(s) for s in seq]) for seq in itertools.product('01', repeat=len(self.high_level_states))]
+        self.high_level_state_codes = [tuple([int(s) for s in seq]) for seq in itertools.product('01', repeat=len(self.high_level_states))]
         
         #if q has already been trained
         if q_matrix_path:
+            print('Loading Q matrix')
             self.q = np.load(q_matrix_path)
         else:
             self.q = np.zeros((len(self.high_level_state_codes), len(self.high_level_actions)))
 
         self.prev_hla = 'random'
+        self.prev_utility = -1.0
         
-        
-    def get_high_level_action(self, player, the_map, with_probability=False):
+    def get_high_level_action(self, player, the_map, high_level_state, with_probability=False):
         '''Get a high level action for the player based on high level percepts'''
         #this should only be called for live players, not incapacitated players, but we'll check
         if player.is_incapacitated:
-            return 'wait'
+            return 'wait', -1.0
         
-        #Create high level state from percept derived from player and map state
-        high_level_state = self.get_high_level_state(player, the_map)
+        #this could be a never encountered before hls, if so, just return previous hla
+        if high_level_state not in self.high_level_state_codes:
+            print('New state found: ', high_level_state)
+            return self.prev_hla, self.prev_utility
         
         state_idx = self.high_level_state_codes.index(high_level_state)
         
         #select best action with probability proportional to utility
         action_utilities = {}
         best_hla = ''
-        best_utility = 0.0
+        best_utility = -float('inf')
         
         for hla in self.get_available_hlas(player, the_map, high_level_state):
             action_idx = self.high_level_actions.index(hla)
             value = self.q[state_idx, action_idx]
             action_utilities[hla] = value
+            if value>best_utility:
+                best_utility=value
+                best_hla=hla
         
         if with_probability:
             #normalize to positive
@@ -97,8 +93,9 @@ class HighLevelPolicy:
             hla = best_hla
             
         self.prev_hla = hla
+        self.prev_utility = best_utility
         
-        return hla
+        return hla, best_utility
     
     
     def get_high_level_state(self, player, the_map):
@@ -119,16 +116,16 @@ class HighLevelPolicy:
         if player.in_enemy_territory:
             state[self.high_level_states.index('self_in_enemy_territory')] = 1
             
-        teammate_player = the_map.get_closest_player_by_team(player, player.team)
-        if teammate_player.has_flag:
+        teammate_info = player.get_closest_player_info_by_team(player.team)
+        if teammate_info['has_flag']:
             state[self.high_level_states.index('nearest_teammate_has_flag')] = 1
-        if teammate_player.is_incapacitated:
+        if teammate_info['is_incapacitated']:
             state[self.high_level_states.index('nearest_teammate_incapacitated')] = 1
         
-        opponent_player = the_map.get_closest_player_by_team(player, 'red' if player.team=='blue' else 'blue')
-        if opponent_player.has_flag:
+        opponent_info = player.get_closest_player_info_by_team('red' if player.team=='blue' else 'blue')
+        if opponent_info['has_flag']:
             state[self.high_level_states.index('nearest_opponent_has_flag')] = 1
-        if opponent_player.is_incapacitated:
+        if opponent_info['is_incapacitated']:
             state[self.high_level_states.index('nearest_opponent_incapacitated')] = 1
             
         return tuple(state)
@@ -141,13 +138,14 @@ class HighLevelPolicy:
             return ['wait']
         
         hlas = self.high_level_actions.copy()
+        hlas.remove('wait')
         hlas.remove('go_opponent_flag_carrier')
         hlas.remove('gaurd_teammate_flag_carrier')
         hlas.remove('go_nearest_incapacitated_teammate')
         
         if (player.team=='blue' and the_map.blue_flag_in_play) or (player.team=='red' and the_map.red_flag_in_play):
             hlas.append('go_opponent_flag_carrier')
-        if (player.team=='blue' and the_map.red_flag_in_play) or (player.team=='red' and the_map.blue_flag_in_play):
+        if not player.has_flag and (player.team=='blue' and the_map.red_flag_in_play) or (player.team=='red' and the_map.blue_flag_in_play):
             hlas.append('gaurd_teammate_flag_carrier')
         if high_level_state[self.high_level_states.index('nearest_teammate_incapacitated')]==1:
             hlas.append('go_nearest_incapacitated_teammate')
