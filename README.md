@@ -2,6 +2,18 @@
 
 A capture-the-flag video game implemented in pygame and using AI Agents. 
 
+## Install and Play
+
+- Optionally activate a virtual environment.
+- Navigate to the app folder.
+- Run 'pip install -r requirements.txt' to install pillow, numpy, and pygame.
+- Run 'python capture_the_flag.py'
+- Optionally provide an Agent Type and Navigation Method argument for the blue players and red players
+	python capture_the_flag.py --blue_agent <agent_type> <navigation_method> --red_agent <agent_type> <navigation_method>
+	Where <agent_type> is one of "random", "reflex", "high_level_planning", and "rl"
+	and <navigation_method> is one of "direct", "bfs", "dfs", "astar"
+- Use keys WASD to move. Press Esc when done.
+
 
 ## Goal of the Game
 

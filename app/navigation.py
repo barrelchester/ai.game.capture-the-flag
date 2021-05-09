@@ -127,37 +127,38 @@ class Navigation():
         successors = []
         step_cost = 1
         tile_col, tile_row = current_state
+        max_speed = self.the_map.tile_speeds.max()
         
         # State to the north
         if tile_row > 0:
             #in array: row (y) by column (x)
-            step_cost = self.the_map.tile_speeds[tile_row - 1, tile_col]
+            step_cost = max_speed - self.the_map.tile_speeds[tile_row - 1, tile_col]
             # a barricade in this direction
-            if not step_cost:
+            if step_cost==max_cost:
                 step_cost = 1e10
                 
             successors.append(((tile_col, tile_row - 1), "w", step_cost))
             
         # State to the south
         if tile_row < self.the_map.tile_speeds.shape[0]-1:
-            step_cost = self.the_map.tile_speeds[tile_row + 1, tile_col]
-            if not step_cost:
+            step_cost = max_speed - self.the_map.tile_speeds[tile_row + 1, tile_col]
+            if step_cost==max_cost:
                 step_cost = 1e10
                 
             successors.append(((tile_col, tile_row + 1), "s", step_cost))
             
         # State to the east
         if tile_col < self.the_map.tile_speeds.shape[1]-1:
-            step_cost = self.the_map.tile_speeds[tile_row, tile_col + 1]
-            if not step_cost:
+            step_cost = max_speed - self.the_map.tile_speeds[tile_row, tile_col + 1]
+            if step_cost==max_cost:
                 step_cost = 1e10
                 
             successors.append(((tile_col + 1, tile_row), "d", step_cost))
             
         # State to the west
         if tile_col > 0:
-            step_cost = self.the_map.tile_speeds[tile_row, tile_col - 1]
-            if not step_cost:
+            step_cost = max_speed - self.the_map.tile_speeds[tile_row, tile_col - 1]
+            if step_cost==max_cost:
                 step_cost = 1e10
                 
             successors.append(((tile_col - 1, tile_row), "a", step_cost))
